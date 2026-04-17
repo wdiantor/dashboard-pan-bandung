@@ -1,6 +1,6 @@
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
 const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A2:E281'; 
+const RANGE = 'Sheet1!A2:E281'; // Kolom A:ID, B:Desa, C:Kecamatan, D:DPRT, E:Kader
 
 let allData = [];
 let myChart = null;
@@ -12,17 +12,23 @@ async function initDashboard() {
         const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
         const data = await response.json();
         
-        // Bersihkan data dari baris kosong
-        allData = data.values.filter(row => row && row.length >= 3);
+        if (!data.values) {
+            console.error("Data tidak ditemukan! Cek API Key atau ID Spreadsheet.");
+            return;
+        }
 
-        const select = document.getElementById('filterKecamatan');
-        
-        // AMBIL KOLOM C (Index 2) untuk daftar Kecamatan
+        // Simpan data mentah
+        allData = data.values;
+
+        // 1. ISI DROPDOWN KECAMATAN
+        // Kita ambil index [2] karena Kecamatan ada di Kolom C
         const kecamatanList = [...new Set(allData.map(row => row[2]))]
-                                .filter(val => val && isNaN(val)) // Pastikan bukan angka
+                                .filter(val => val && isNaN(val)) // Hanya ambil Teks, bukan Angka
                                 .sort();
         
+        const select = document.getElementById('filterKecamatan');
         select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
+        
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
             opt.value = kec;
@@ -30,24 +36,26 @@ async function initDashboard() {
             select.appendChild(opt);
         });
 
-        // Jalankan fungsi tampil data
+        // 2. Jalankan Tampilan Data
         applyFilter();
+
+        // 3. Jalankan Peta
         initMap();
 
     } catch (e) {
-        console.error("Dashboard Error:", e);
+        console.error("Gagal memuat dashboard:", e);
     }
 }
 
 function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     
-    // Filter berdasarkan Kolom C (index 2)
+    // Filter berdasarkan Kolom C (Index 2)
     const filtered = filterValue === "ALL" 
         ? allData 
         : allData.filter(row => row[2] && row[2].trim() === filterValue);
 
-    // Hitung Statistik (DPRT index 3, Kader index 4)
+    // Update Statistik (DPRT: Kolom D [3], Kader: Kolom E [4])
     const dprt = filtered.reduce((acc, row) => acc + (parseInt(row[3]) || 0), 0);
     const kader = filtered.reduce((acc, row) => acc + (parseInt(row[4]) || 0), 0);
     
@@ -56,23 +64,23 @@ function applyFilter() {
 
     let labels, vals;
     if (filterValue === "ALL") {
-        // GRAFIK MODE KECAMATAN
+        // Tampilkan Total per Kecamatan di Grafik
         const sum = {};
         filtered.forEach(row => { 
             const namaKec = row[2];
-            if(namaKec) {
-                sum[namaKec] = (sum[namaKec] || 0) + (parseInt(row[3]) || 0); 
-            }
+            if(namaKec) sum[namaKec] = (sum[namaKec] || 0) + (parseInt(row[3]) || 0); 
         });
         labels = Object.keys(sum);
         vals = Object.values(sum);
     } else {
-        // GRAFIK MODE DESA (Jika satu kecamatan dipilih)
-        labels = filtered.map(row => row[1]); // Kolom B (index 1)
+        // Tampilkan Detail per Desa di Grafik
+        labels = filtered.map(row => row[1]); // Kolom B (Index 1)
         vals = filtered.map(row => parseInt(row[3]) || 0);
     }
 
-    renderChart(labels, vals, filterValue === "ALL" ? "Total DPRT per Kecamatan" : "DPRT per Desa");
+    renderChart(labels, vals, filterValue === "ALL" ? "DPRT per Kecamatan" : `Detail Desa di ${filterValue}`);
+    
+    // Reset warna peta jika filter berubah
     if(geojsonLayer) geojsonLayer.resetStyle();
 }
 
@@ -94,18 +102,10 @@ function renderChart(l, v, title) {
         options: { 
             indexAxis: 'y', 
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
+            plugins: { legend: { display: false } },
             scales: { 
-                y: { 
-                    ticks: { color: '#94a3b8', font: { size: 10 } },
-                    grid: { display: false }
-                },
-                x: {
-                    ticks: { color: '#94a3b8' },
-                    grid: { color: '#334155' }
-                }
+                y: { ticks: { color: '#94a3b8', font: { size: 10 } } },
+                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
             }
         }
     });
@@ -113,6 +113,7 @@ function renderChart(l, v, title) {
 
 function initMap() {
     if (map) return;
+    // Pastikan di HTML ada <div id="map" style="height: 500px"></div>
     map = L.map('map').setView([-7.0252, 107.5197], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -130,7 +131,8 @@ function initMap() {
                     });
                 }
             }).addTo(map);
-        });
+        })
+        .catch(err => console.warn("File kab-bandung.json tidak ditemukan."));
 }
 
 function styleMap(feature) {
@@ -143,4 +145,5 @@ function styleMap(feature) {
     };
 }
 
+// Jalankan Dashboard
 initDashboard();
