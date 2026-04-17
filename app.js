@@ -17,8 +17,11 @@ async function initDashboard() {
         
         if (!data.values) return;
         
-        // Filter baris yang valid (minimal ada kolom kecamatan)
-        allData = data.values.filter(row => row.length >= 3);
+        // Membersihkan data dari spasi tambahan
+        allData = data.values.filter(row => row.length >= 3).map(row => {
+            if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
+            return row;
+        });
 
         const select = document.getElementById('filterKecamatan');
         const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))]
@@ -29,7 +32,7 @@ async function initDashboard() {
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
             opt.value = kec;
-            opt.textContent = kec.toUpperCase(); // Paksa tampilan besar di dropdown
+            opt.textContent = kec;
             select.appendChild(opt);
         });
 
@@ -44,12 +47,10 @@ async function initDashboard() {
 function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     
-    // Normalisasi pencocokan data
     const filtered = filterValue === "ALL" 
         ? allData 
-        : allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === filterValue.trim().toUpperCase());
+        : allData.filter(row => row[idx.kec] === filterValue);
 
-    // Update Statistik
     const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
     const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
     
@@ -61,10 +62,7 @@ function applyFilter() {
         const summary = {};
         filtered.forEach(row => {
             const kec = row[idx.kec];
-            if(kec && isNaN(kec)) {
-                const cleanKec = kec.trim().toUpperCase();
-                summary[cleanKec] = (summary[cleanKec] || 0) + (parseInt(row[idx.dprt]) || 0);
-            }
+            if(kec) summary[kec] = (summary[kec] || 0) + (parseInt(row[idx.dprt]) || 0);
         });
         labels = Object.keys(summary);
         vals = Object.values(summary);
@@ -95,21 +93,10 @@ function renderChart(l, v) {
         options: {
             indexAxis: 'y',
             maintainAspectRatio: false,
-            plugins: { 
-                legend: { display: false } 
-            },
+            plugins: { legend: { display: false } },
             scales: {
-                y: { 
-                    ticks: { 
-                        color: '#94a3b8', 
-                        autoSkip: false, 
-                        font: { size: 9 } 
-                    } 
-                },
-                x: { 
-                    ticks: { color: '#94a3b8' }, 
-                    grid: { color: '#334155' } 
-                }
+                y: { ticks: { color: '#94a3b8', autoSkip: false, font: { size: 9 } } },
+                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
             }
         }
     });
@@ -126,33 +113,28 @@ function initMap() {
             geojsonLayer = L.geoJson(geoData, {
                 style: styleMap,
                 onEachFeature: (feature, layer) => {
-                    // Ambil nama kecamatan dari properti GeoJSON
-                    const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
+                    // Logika pencarian nama kecamatan yang lebih kuat
+                    let name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
                     
-                    // Hitung total DPRT untuk popup berdasarkan nama di peta
-                    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name);
+                    // Jika nama yang muncul masih "BANDUNG", kita coba ambil dari properti lain jika ada
+                    if (name === "BANDUNG" && feature.properties.KEC) {
+                        name = feature.properties.KEC.toUpperCase().trim();
+                    }
+
+                    const dataKec = allData.filter(row => row[idx.kec] === name);
                     const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
 
                     layer.bindPopup(`<b>KECAMATAN: ${name}</b><br>DPRT Aktif: ${total.toLocaleString('id-ID')}`);
                     
-                    // Event saat wilayah di peta diklik
                     layer.on('click', () => {
                         const select = document.getElementById('filterKecamatan');
-                        
-                        // Cari opsi di dropdown yang cocok dengan klik peta
-                        let matchFound = false;
                         for (let i = 0; i < select.options.length; i++) {
-                            if (select.options[i].value.toUpperCase().trim() === name) {
+                            if (select.options[i].value === name) {
                                 select.selectedIndex = i;
-                                matchFound = true;
+                                applyFilter();
                                 break;
                             }
                         }
-                        
-                        // Jika tidak ketemu di dropdown, set ke ALL tapi tetap jalankan filter manual
-                        if (!matchFound) select.value = "ALL";
-                        
-                        applyFilter();
                     });
                 }
             }).addTo(map);
@@ -161,23 +143,13 @@ function initMap() {
 
 function styleMap(feature) {
     const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
-    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name);
+    const dataKec = allData.filter(row => row[idx.kec] === name);
     const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-
-    return {
-        fillColor: getColor(total),
-        weight: 1.5,
-        color: 'white',
-        fillOpacity: 0.7
-    };
+    return { fillColor: getColor(total), weight: 1.5, color: 'white', fillOpacity: 0.7 };
 }
 
 function getColor(d) {
-    return d > 2000 ? '#1e3a8a' : 
-           d > 1000 ? '#1d4ed8' : 
-           d > 500  ? '#3b82f6' : 
-           d > 100  ? '#93c5fd' : 
-                      '#334155'; 
+    return d > 2000 ? '#1e3a8a' : d > 1000 ? '#1d4ed8' : d > 500 ? '#3b82f6' : d > 100 ? '#93c5fd' : '#334155'; 
 }
 
 initDashboard();
