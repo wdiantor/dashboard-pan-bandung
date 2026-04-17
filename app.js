@@ -14,32 +14,45 @@ async function initDashboard() {
     try {
         const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
         const data = await response.json();
+        
+        if (!data.values) return;
+        
+        // Filter baris yang valid (minimal ada kolom kecamatan)
         allData = data.values.filter(row => row.length >= 3);
 
         const select = document.getElementById('filterKecamatan');
-        const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))].filter(val => val && isNaN(val)).sort();
+        const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))]
+            .filter(val => val && isNaN(val))
+            .sort();
         
         select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
             opt.value = kec;
-            opt.textContent = kec;
+            opt.textContent = kec.toUpperCase(); // Paksa tampilan besar di dropdown
             select.appendChild(opt);
         });
 
         applyFilter();
         initMap();
 
-    } catch (e) { console.error("Error load data:", e); }
+    } catch (e) { 
+        console.error("Error load data:", e); 
+    }
 }
 
 function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
-    const filtered = filterValue === "ALL" ? allData : allData.filter(row => row[idx.kec] === filterValue);
+    
+    // Normalisasi pencocokan data
+    const filtered = filterValue === "ALL" 
+        ? allData 
+        : allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === filterValue.trim().toUpperCase());
 
     // Update Statistik
     const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
     const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
+    
     document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
 
@@ -48,7 +61,10 @@ function applyFilter() {
         const summary = {};
         filtered.forEach(row => {
             const kec = row[idx.kec];
-            if(kec && isNaN(kec)) summary[kec] = (summary[kec] || 0) + (parseInt(row[idx.dprt]) || 0);
+            if(kec && isNaN(kec)) {
+                const cleanKec = kec.trim().toUpperCase();
+                summary[cleanKec] = (summary[cleanKec] || 0) + (parseInt(row[idx.dprt]) || 0);
+            }
         });
         labels = Object.keys(summary);
         vals = Object.values(summary);
@@ -58,8 +74,6 @@ function applyFilter() {
     }
 
     renderChart(labels, vals);
-    
-    // Sinkronisasi warna peta
     if (geojsonLayer) geojsonLayer.resetStyle();
 }
 
@@ -81,16 +95,21 @@ function renderChart(l, v) {
         options: {
             indexAxis: 'y',
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { 
+                legend: { display: false } 
+            },
             scales: {
                 y: { 
                     ticks: { 
                         color: '#94a3b8', 
-                        autoSkip: false, // PAKSA SEMUA NAMA MUNCUL
+                        autoSkip: false, 
                         font: { size: 9 } 
                     } 
                 },
-                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+                x: { 
+                    ticks: { color: '#94a3b8' }, 
+                    grid: { color: '#334155' } 
+                }
             }
         }
     });
@@ -107,15 +126,32 @@ function initMap() {
             geojsonLayer = L.geoJson(geoData, {
                 style: styleMap,
                 onEachFeature: (feature, layer) => {
-                    const name = feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ;
+                    // Ambil nama kecamatan dari properti GeoJSON
+                    const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
                     
-                    // Hitung total DPRT untuk popup
-                    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name.toUpperCase());
+                    // Hitung total DPRT untuk popup berdasarkan nama di peta
+                    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name);
                     const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
 
-                    layer.bindPopup(`<b>Kecamatan: ${name}</b><br>DPRT Aktif: ${total}`);
+                    layer.bindPopup(`<b>KECAMATAN: ${name}</b><br>DPRT Aktif: ${total.toLocaleString('id-ID')}`);
+                    
+                    // Event saat wilayah di peta diklik
                     layer.on('click', () => {
-                        document.getElementById('filterKecamatan').value = name;
+                        const select = document.getElementById('filterKecamatan');
+                        
+                        // Cari opsi di dropdown yang cocok dengan klik peta
+                        let matchFound = false;
+                        for (let i = 0; i < select.options.length; i++) {
+                            if (select.options[i].value.toUpperCase().trim() === name) {
+                                select.selectedIndex = i;
+                                matchFound = true;
+                                break;
+                            }
+                        }
+                        
+                        // Jika tidak ketemu di dropdown, set ke ALL tapi tetap jalankan filter manual
+                        if (!matchFound) select.value = "ALL";
+                        
                         applyFilter();
                     });
                 }
@@ -124,8 +160,8 @@ function initMap() {
 }
 
 function styleMap(feature) {
-    const name = feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ;
-    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name.toUpperCase());
+    const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
+    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name);
     const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
 
     return {
@@ -137,11 +173,11 @@ function styleMap(feature) {
 }
 
 function getColor(d) {
-    return d > 2000 ? '#1e3a8a' : // Biru sangat gelap
-           d > 1000 ? '#1d4ed8' : // Biru gelap
-           d > 500  ? '#3b82f6' : // Biru sedang
-           d > 100  ? '#93c5fd' : // Biru muda
-                      '#334155';  // Abu-abu jika sedikit/kosong
+    return d > 2000 ? '#1e3a8a' : 
+           d > 1000 ? '#1d4ed8' : 
+           d > 500  ? '#3b82f6' : 
+           d > 100  ? '#93c5fd' : 
+                      '#334155'; 
 }
 
 initDashboard();
