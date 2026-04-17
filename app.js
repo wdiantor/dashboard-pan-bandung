@@ -1,37 +1,23 @@
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
 const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A1:E281'; // Kita ambil dari A1 untuk deteksi header
+const RANGE = 'Sheet1!A2:E281'; 
 
 let allData = [];
 let myChart = null;
 let map = null;
 let geojsonLayer = null;
-let colIndex = { desa: 1, kec: 2, dprt: 3, kader: 4 };
+
+// Indeks Kolom: 1:Desa, 2:Kecamatan, 3:DPRT, 4:Kader
+const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
 
 async function initDashboard() {
     try {
         const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
         const data = await response.json();
-        
-        if (!data.values) return;
-
-        // Ambil baris pertama sebagai Header untuk deteksi kolom
-        const header = data.values[0];
-        allData = data.values.slice(1); // Data asli mulai baris ke-2
-
-        // OTOMATIS CARI KOLOM (Agar tidak ngaco angka lagi)
-        header.forEach((h, i) => {
-            const head = h.toLowerCase();
-            if (head.includes('kecamatan')) colIndex.kec = i;
-            if (head.includes('desa') || head.includes('kelurahan')) colIndex.desa = i;
-            if (head.includes('aktif') || head.includes('dprt')) colIndex.dprt = i;
-            if (head.includes('kader') || head.includes('total')) colIndex.kader = i;
-        });
+        allData = data.values.filter(row => row.length >= 3);
 
         const select = document.getElementById('filterKecamatan');
-        const kecamatanList = [...new Set(allData.map(row => row[colIndex.kec]))]
-                                .filter(val => val && isNaN(val)) 
-                                .sort();
+        const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))].filter(val => val && isNaN(val)).sort();
         
         select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
         kecamatanList.forEach(kec => {
@@ -44,7 +30,70 @@ async function initDashboard() {
         applyFilter();
         initMap();
 
-    } catch (e) { console.error("Error:", e); }
+    } catch (e) { console.error("Error load data:", e); }
+}
+
+function applyFilter() {
+    const filterValue = document.getElementById('filterKecamatan').value;
+    const filtered = filterValue === "ALL" ? allData : allData.filter(row => row[idx.kec] === filterValue);
+
+    // Update Statistik
+    const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+    const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
+    document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
+    document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
+
+    let labels, vals;
+    if (filterValue === "ALL") {
+        const summary = {};
+        filtered.forEach(row => {
+            const kec = row[idx.kec];
+            if(kec && isNaN(kec)) summary[kec] = (summary[kec] || 0) + (parseInt(row[idx.dprt]) || 0);
+        });
+        labels = Object.keys(summary);
+        vals = Object.values(summary);
+    } else {
+        labels = filtered.map(row => row[idx.desa]);
+        vals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
+    }
+
+    renderChart(labels, vals);
+    
+    // Sinkronisasi warna peta
+    if (geojsonLayer) geojsonLayer.resetStyle();
+}
+
+function renderChart(l, v) {
+    const ctx = document.getElementById('panChart').getContext('2d');
+    if (myChart) myChart.destroy();
+
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: l,
+            datasets: [{
+                label: 'DPRT Aktif',
+                data: v,
+                backgroundColor: '#3b82f6',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { 
+                    ticks: { 
+                        color: '#94a3b8', 
+                        autoSkip: false, // PAKSA SEMUA NAMA MUNCUL
+                        font: { size: 9 } 
+                    } 
+                },
+                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+            }
+        }
+    });
 }
 
 function initMap() {
@@ -59,62 +108,40 @@ function initMap() {
                 style: styleMap,
                 onEachFeature: (feature, layer) => {
                     const name = feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ;
-                    layer.bindPopup(`<b>Kecamatan: ${name}</b>`);
+                    
+                    // Hitung total DPRT untuk popup
+                    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name.toUpperCase());
+                    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+
+                    layer.bindPopup(`<b>Kecamatan: ${name}</b><br>DPRT Aktif: ${total}`);
                     layer.on('click', () => {
                         document.getElementById('filterKecamatan').value = name;
                         applyFilter();
                     });
                 }
             }).addTo(map);
-        }).catch(err => console.warn("File JSON peta tidak ditemukan."));
+        });
 }
 
 function styleMap(feature) {
-    const kecMap = feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ;
-    const dataKec = allData.filter(row => row[colIndex.kec] && row[colIndex.kec].trim().toUpperCase() === kecMap.toUpperCase());
-    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[colIndex.dprt]) || 0), 0);
+    const name = feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ;
+    const dataKec = allData.filter(row => row[idx.kec] && row[idx.kec].trim().toUpperCase() === name.toUpperCase());
+    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+
     return {
-        fillColor: total > 500 ? '#1e3a8a' : total > 0 ? '#3b82f6' : '#334155',
-        weight: 1, color: 'white', fillOpacity: 0.7
+        fillColor: getColor(total),
+        weight: 1.5,
+        color: 'white',
+        fillOpacity: 0.7
     };
 }
 
-function applyFilter() {
-    const filterValue = document.getElementById('filterKecamatan').value;
-    const filtered = filterValue === "ALL" ? allData : allData.filter(row => row[colIndex.kec] === filterValue);
-
-    const dprt = filtered.reduce((acc, row) => acc + (parseInt(row[colIndex.dprt]) || 0), 0);
-    const kader = filtered.reduce((acc, row) => acc + (parseInt(row[colIndex.kader]) || 0), 0);
-    document.getElementById('stat-dprt').innerText = dprt.toLocaleString('id-ID');
-    document.getElementById('stat-kader').innerText = kader.toLocaleString('id-ID');
-
-    let labels, vals;
-    if (filterValue === "ALL") {
-        const sum = {};
-        filtered.forEach(row => { 
-            const k = row[colIndex.kec]; 
-            if(k && isNaN(k)) sum[k] = (sum[k] || 0) + (parseInt(row[colIndex.dprt]) || 0); 
-        });
-        labels = Object.keys(sum);
-        vals = Object.values(sum);
-    } else {
-        labels = filtered.map(row => row[colIndex.desa]);
-        vals = filtered.map(row => parseInt(row[colIndex.dprt]) || 0);
-    }
-    renderChart(labels, vals);
-}
-
-function renderChart(l, v) {
-    const ctx = document.getElementById('panChart').getContext('2d');
-    if (myChart) myChart.destroy();
-    myChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: l,
-            datasets: [{ label: 'DPRT', data: v, backgroundColor: '#3b82f6' }]
-        },
-        options: { indexAxis: 'y', maintainAspectRatio: false }
-    });
+function getColor(d) {
+    return d > 2000 ? '#1e3a8a' : // Biru sangat gelap
+           d > 1000 ? '#1d4ed8' : // Biru gelap
+           d > 500  ? '#3b82f6' : // Biru sedang
+           d > 100  ? '#93c5fd' : // Biru muda
+                      '#334155';  // Abu-abu jika sedikit/kosong
 }
 
 initDashboard();
