@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard PAN Kabupaten Bandung</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-blue-500 tracking-tight">DATA DPD PAN</h1>
+                <p class="text-slate-400">Kabupaten Bandung | Real-time Dashboard</p>
+            </div>
+            <div class="bg-slate-800 px-6 py-3 rounded-2xl border border-slate-700 shadow-xl">
+                <span class="text-slate-400 text-sm block">Total Anggota/DPD</span>
+                <span id="total-stats" class="text-2xl font-bold text-orange-400">0</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-8">
+            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl">
+                <h2 class="text-lg font-semibold mb-6 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-blue-500 rounded-full"></span>
+                    Sebaran per Kecamatan
+                </h2>
+                <div class="h-[400px]">
+                    <canvas id="panChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
