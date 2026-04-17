@@ -1,6 +1,6 @@
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
 const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A2:E281'; 
+const RANGE = 'Sheet1!B2:E281'; 
 
 let allData = [];
 let myChart = null;
