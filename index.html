@@ -3,50 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard PAN Kabupaten Bandung</title>
+    <title>Dashboard PAN Kab. Bandung</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* CRITICAL: Peta wajib punya tinggi */
+        #map { 
+            height: 500px; 
+            width: 100%; 
+            border-radius: 1rem; 
+            z-index: 1; 
+        }
+        /* Memperbaiki z-index dropdown agar tidak tertutup peta */
+        #filterKecamatan { z-index: 10; position: relative; }
+    </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <header class="mb-10 text-center md:text-left">
-            <h1 class="text-3xl font-extrabold text-blue-500">📊 DASHBOARD PAN KAB. BANDUNG</h1>
-            <p class="text-slate-400">Data Real-time Desa & Kecamatan</p>
+<body class="bg-slate-900 text-white min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-blue-500">DASHBOARD DPD PAN</h1>
+            <p class="text-slate-400">Kabupaten Bandung - Data Real-time</p>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="md:col-span-2">
-                <label class="block text-sm text-slate-400 mb-2">Filter Kecamatan:</label>
-                <select id="filterKecamatan" class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onchange="applyFilter()">
-                    <option value="ALL">Semua Kecamatan</option>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <label class="block text-sm text-slate-400 mb-2 font-bold uppercase">Kecamatan</label>
+                <select id="filterKecamatan" onchange="applyFilter()" class="w-full bg-slate-700 p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="ALL">SEMUA KECAMATAN</option>
                 </select>
             </div>
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <span class="text-slate-400 text-xs block uppercase font-bold">Total DPRT Aktif</span>
-                <span id="stat-dprt" class="text-2xl font-bold text-blue-400">0</span>
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
+                <div>
+                    <p class="text-slate-400 text-sm font-bold uppercase">DPRT Aktif</p>
+                    <h2 id="stat-dprt" class="text-4xl font-black text-blue-400">0</h2>
+                </div>
             </div>
-            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <span class="text-slate-400 text-xs block uppercase font-bold">Total Kader</span>
-                <span id="stat-kader" class="text-2xl font-bold text-orange-400">0</span>
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
+                <div>
+                    <p class="text-slate-400 text-sm font-bold uppercase">Total Kader</p>
+                    <h2 id="stat-kader" class="text-4xl font-black text-orange-400">0</h2>
+                </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl">
-                <h2 class="text-lg font-semibold mb-4">Sebaran Data</h2>
-                <div class="h-[400px]">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <h3 class="mb-4 font-bold text-slate-300">Grafik Sebaran Data</h3>
+                <div class="h-96">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
-            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center justify-center">
-                <h2 class="text-lg font-semibold mb-4 self-start">Peta Wilayah</h2>
-                <div id="map-placeholder" class="text-slate-500 text-center">
-                    <p>Integrasi Peta GeoJSON Kabupaten Bandung</p>
-                    <p class="text-sm italic">(Memerlukan file .json peta Bandung)</p>
-                </div>
+
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <h3 class="mb-4 font-bold text-slate-300">Peta Wilayah Kerja</h3>
+                <div id="map"></div>
             </div>
         </div>
     </div>
+
     <script src="app.js"></script>
 </body>
 </html>
