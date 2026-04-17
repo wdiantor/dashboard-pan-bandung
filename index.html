@@ -9,30 +9,44 @@
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
     <div class="container mx-auto px-4 py-8">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
-            <div>
-                <h1 class="text-3xl font-extrabold text-blue-500 tracking-tight">DATA DPD PAN</h1>
-                <p class="text-slate-400">Kabupaten Bandung | Real-time Dashboard</p>
+        <header class="mb-10 text-center md:text-left">
+            <h1 class="text-3xl font-extrabold text-blue-500">📊 DASHBOARD PAN KAB. BANDUNG</h1>
+            <p class="text-slate-400">Data Real-time Desa & Kecamatan</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="md:col-span-2">
+                <label class="block text-sm text-slate-400 mb-2">Filter Kecamatan:</label>
+                <select id="filterKecamatan" class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onchange="applyFilter()">
+                    <option value="ALL">Semua Kecamatan</option>
+                </select>
             </div>
-            <div class="bg-slate-800 px-6 py-3 rounded-2xl border border-slate-700 shadow-xl">
-                <span class="text-slate-400 text-sm block">Total Anggota/DPD</span>
-                <span id="total-stats" class="text-2xl font-bold text-orange-400">0</span>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-slate-400 text-xs block uppercase font-bold">Total DPRT Aktif</span>
+                <span id="stat-dprt" class="text-2xl font-bold text-blue-400">0</span>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <span class="text-slate-400 text-xs block uppercase font-bold">Total Kader</span>
+                <span id="stat-kader" class="text-2xl font-bold text-orange-400">0</span>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl">
-                <h2 class="text-lg font-semibold mb-6 flex items-center gap-2">
-                    <span class="w-2 h-6 bg-blue-500 rounded-full"></span>
-                    Sebaran per Kecamatan
-                </h2>
+                <h2 class="text-lg font-semibold mb-4">Sebaran Data</h2>
                 <div class="h-[400px]">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
+            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center justify-center">
+                <h2 class="text-lg font-semibold mb-4 self-start">Peta Wilayah</h2>
+                <div id="map-placeholder" class="text-slate-500 text-center">
+                    <p>Integrasi Peta GeoJSON Kabupaten Bandung</p>
+                    <p class="text-sm italic">(Memerlukan file .json peta Bandung)</p>
+                </div>
+            </div>
         </div>
     </div>
-
     <script src="app.js"></script>
 </body>
 </html>
