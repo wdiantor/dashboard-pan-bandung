@@ -1,6 +1,6 @@
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
 const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!B2:E281'; // Kolom A sampai E
+const RANGE = 'Sheet1!A2:E281'; // Kolom A sampai E
 
 let allData = [];
 let myChart = null;
@@ -13,7 +13,7 @@ async function initDashboard() {
         allData = data.values;
 
         // Isi Dropdown Kecamatan
-        const kecamatanList = [...new Set(allData.map(row => row[2]))].sort();
+        const kecamatanList = [...new Set(allData.map(row => row[3]))].sort();
         const select = document.getElementById('filterKecamatan');
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
@@ -32,7 +32,7 @@ function applyFilter() {
     // Filter data berdasarkan kecamatan
     const filtered = filterValue === "ALL" 
         ? allData 
-        : allData.filter(row => row[2] === filterValue);
+        : allData.filter(row => row[3] === filterValue);
 
     // Jika filter ALL, tampilkan ringkasan per kecamatan
     // Jika filter per Kecamatan, tampilkan detail per desa
@@ -42,21 +42,21 @@ function applyFilter() {
         // Kelompokkan data per kecamatan untuk grafik utama
         const summary = {};
         filtered.forEach(row => {
-            const kec = row[2];
+            const kec = row[3];
             summary[kec] = (summary[kec] || 0) + parseInt(row[3] || 0);
         });
         labels = Object.keys(summary);
         dprtData = Object.values(summary);
     } else {
         // Tampilkan detail Desa
-        labels = filtered.map(row => row[1]); // Nama Desa
-        dprtData = filtered.map(row => parseInt(row[3] || 0));
-        kaderData = filtered.map(row => parseInt(row[4] || 0));
+        labels = filtered.map(row => row[2]); // Nama Desa
+        dprtData = filtered.map(row => parseInt(row[4] || 0));
+        kaderData = filtered.map(row => parseInt(row[5] || 0));
     }
 
     // Update Statistik
-    const totalDPRT = filtered.reduce((acc, row) => acc + parseInt(row[3] || 0), 0);
-    const totalKader = filtered.reduce((acc, row) => acc + parseInt(row[4] || 0), 0);
+    const totalDPRT = filtered.reduce((acc, row) => acc + parseInt(row[4] || 0), 0);
+    const totalKader = filtered.reduce((acc, row) => acc + parseInt(row[5] || 0), 0);
     document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
 
