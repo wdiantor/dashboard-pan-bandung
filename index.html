@@ -1,153 +1,154 @@
-const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
-const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A2:E281'; 
-
-let allData = [];
-let myChart = null;
-let map = null;
-let geojsonLayer = null;
-
-const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
-
-async function initDashboard() {
-    try {
-        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
-        const data = await response.json();
-        if (!data.values) return;
-        
-        allData = data.values.filter(row => row.length >= 3).map(row => {
-            if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
-            return row;
-        });
-
-        const select = document.getElementById('filterKecamatan');
-        const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))].filter(val => val && isNaN(val)).sort();
-        
-        select.innerHTML = '<option value="ALL">KABUPATEN BANDUNG (SEMUA)</option>';
-        kecamatanList.forEach(kec => {
-            let opt = document.createElement('option');
-            opt.value = kec;
-            opt.textContent = kec;
-            select.appendChild(opt);
-        });
-
-        applyFilter();
-        initMap();
-    } catch (e) { console.error(e); }
-}
-
-function applyFilter() {
-    const filterValue = document.getElementById('filterKecamatan').value;
-    const filtered = filterValue === "ALL" ? allData : allData.filter(row => row[idx.kec] === filterValue);
-
-    const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-    const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Pemenangan PAN Kab. Bandung</title>
     
-    document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
-    document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg">    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 
-    let labels = [], dprtVals = [], kaderVals = [];
-
-    if (filterValue === "ALL") {
-        const summary = {};
-        filtered.forEach(row => {
-            const kec = row[idx.kec];
-            if(kec) {
-                if(!summary[kec]) summary[kec] = { d: 0, k: 0 };
-                summary[kec].d += (parseInt(row[idx.dprt]) || 0);
-                summary[kec].k += (parseInt(row[idx.kader]) || 0);
-            }
-        });
-        labels = Object.keys(summary);
-        dprtVals = labels.map(l => summary[l].d);
-        kaderVals = labels.map(l => summary[l].k);
-    } else {
-        labels = filtered.map(row => row[idx.desa]);
-        dprtVals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
-        kaderVals = filtered.map(row => parseInt(row[idx.kader]) || 0);
-    }
-
-    renderChart(labels, dprtVals, kaderVals);
-    if (geojsonLayer) geojsonLayer.resetStyle();
-}
-
-function renderChart(labels, dprtData, kaderData) {
-    const ctx = document.getElementById('panChart').getContext('2d');
-    if (myChart) myChart.destroy();
-
-    myChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Kader',
-                    data: kaderData,
-                    backgroundColor: '#f97316',
-                    borderRadius: 4,
-                    barThickness: 8
-                },
-                {
-                    label: 'DPRT Aktif',
-                    data: dprtData,
-                    backgroundColor: '#0054a6',
-                    borderRadius: 4,
-                    barThickness: 8
-                }
-            ]
-        },
-        options: {
-            indexAxis: 'y',
-            maintainAspectRatio: false,
-            plugins: { 
-                legend: { 
-                    display: true,
-                    labels: { color: '#1e293b', font: { weight: 'bold' } } 
-                }
-            },
-            scales: {
-                y: { ticks: { color: '#1e293b', font: { size: 10, weight: 'bold' } }, grid: { display: false } },
-                x: { ticks: { color: '#1e293b' }, grid: { color: 'rgba(0,0,0,0.05)' } }
-            }
+    <style>
+        :root {
+            --pan-blue-dark: #003366;
+            --pan-blue-light: #0054a6;
         }
-    });
-}
 
-function initMap() {
-    if (map) return;
-    map = L.map('map', { zoomControl: false }).setView([-7.0252, 107.5197], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            /* Gradiasi Biru PAN sesuai permintaan */
+            background: radial-gradient(circle at top left, #004182, #0f172a 70%);
+            color: #f1f5f9;
+        }
 
-    fetch('kab-bandung.json')
-        .then(res => res.json())
-        .then(geoData => {
-            geojsonLayer = L.geoJson(geoData, {
-                style: styleMap,
-                onEachFeature: (feature, layer) => {
-                    let name = (feature.properties.KECAMATAN || feature.properties.name || "").toUpperCase().trim();
-                    const dataKec = allData.filter(row => row[idx.kec] === name);
-                    const totalD = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-                    const totalK = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
+        /* Card Transparan Elegan */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
 
-                    layer.bindPopup(`<b>KEC. ${name}</b><br>DPRT: ${totalD}<br>Kader: ${totalK}`);
-                    layer.on('click', () => {
-                        document.getElementById('filterKecamatan').value = name;
-                        applyFilter();
-                    });
-                }
-            }).addTo(map);
-        });
-}
+        #map { 
+            height: 550px; 
+            width: 100%; 
+            border-radius: 1.5rem; 
+            z-index: 1;
+            filter: brightness(0.8) contrast(1.2);
+        }
 
-function styleMap(feature) {
-    const name = (feature.properties.KECAMATAN || feature.properties.name || "").toUpperCase().trim();
-    const dataKec = allData.filter(row => row[idx.kec] === name);
-    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-    return { fillColor: getColor(total), weight: 1.5, color: 'white', fillOpacity: 0.8 };
-}
+        /* Dark Mode Map Filter */
+        .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
 
-function getColor(d) {
-    return d > 2000 ? '#003366' : d > 1000 ? '#0054a6' : d > 500 ? '#3b82f6' : d > 100 ? '#93c5fd' : '#e2e8f0'; 
-}
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
 
-initDashboard();
+        .logo-container img {
+            height: 60px;
+            object-fit: contain;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.2));
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-4 logo-container">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" alt="Logo Kab Bandung">
+                <img src="https://upload.wikimedia.org/wikipedia/id/thumb/e/e0/Logo_DPRD_Kabupaten_Bandung.png/200px-Logo_DPRD_Kabupaten_Bandung.png" alt="Logo DPRD">
+                <div class="h-12 w-[1px] bg-white/20 mx-2"></div>
+                <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" alt="Logo PAN">
+            </div>
+
+            <div class="text-center md:text-right">
+                <h1 class="text-3xl font-extrabold text-blue-400 tracking-tight uppercase">DPRT & Kader Monitoring</h1>
+                <p class="text-slate-300 font-medium tracking-wide">DPD PARTAI AMANAT NASIONAL KAB. BANDUNG</p>
+                <div class="mt-2 inline-block bg-blue-500/20 px-3 py-1 rounded-full border border-blue-400/30 text-[10px] text-blue-300 font-bold uppercase tracking-widest">
+                    Live Data Connection
+                </div>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
+                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-[0.2em]">Pilih Wilayah</label>
+                <select id="filterKecamatan" onchange="applyFilter()" 
+                    class="w-full bg-slate-900/50 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-bold">
+                    <option value="ALL">KABUPATEN BANDUNG (SEMUA)</option>
+                </select>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
+                <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl">
+                    <i class="fas fa-sitemap"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">DPRT Aktif</p>
+                    <h2 id="stat-dprt" class="text-4xl font-black text-white">0</h2>
+                </div>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
+                <div class="bg-orange-500/20 p-4 rounded-xl text-orange-400 text-2xl">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Total Kader</p>
+                    <h2 id="stat-kader" class="text-4xl font-black text-white">0</h2>
+                </div>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl flex items-center gap-5 border-r-4 border-r-emerald-500">
+                <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl">
+                    <i class="fas fa-percentage"></i>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Kesiapan</p>
+                    <h2 class="text-4xl font-black text-emerald-400">100%</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
+                <div class="flex items-center justify-between mb-8">
+                    <h3 class="font-bold text-lg text-white">Statistik Per Wilayah</h3>
+                    <span class="text-[9px] bg-blue-500 text-white px-2 py-1 rounded font-black uppercase">Data Comparison</span>
+                </div>
+                <div class="h-[650px]">
+                    <canvas id="panChart"></canvas>
+                </div>
+            </div>
+
+            <div class="lg:col-span-3 glass-card p-6 rounded-3xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="font-bold text-lg text-white">Sebaran Geografis</h3>
+                    <div class="flex gap-2">
+                        <span class="text-[9px] bg-slate-700 text-slate-300 px-2 py-1 rounded uppercase font-black tracking-tighter">Kab. Bandung Map</span>
+                    </div>
+                </div>
+                
+                <div id="map" class="shadow-inner"></div>
+
+                <div class="mt-8 grid grid-cols-5 gap-3 text-[10px] font-bold text-center uppercase tracking-tighter">
+                    <div class="flex flex-col gap-2"><div class="h-2 rounded bg-slate-700 shadow-sm"></div>0 Data</div>
+                    <div class="flex flex-col gap-2"><div class="h-2 rounded bg-[#93c5fd]"></div>1-100</div>
+                    <div class="flex flex-col gap-2"><div class="h-2 rounded bg-[#3b82f6]"></div>101-500</div>
+                    <div class="flex flex-col gap-2"><div class="h-2 rounded bg-[#1d4ed8]"></div>501-1000</div>
+                    <div class="flex flex-col gap-2"><div class="h-2 rounded bg-[#1e3a8a]"></div>1000+</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://kit.fontawesome.com/your-code-here.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
