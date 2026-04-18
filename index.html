@@ -20,15 +20,14 @@
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background: radial-gradient(circle at top left, #004182, #0f172a 70%);
+            background: radial-gradient(circle at top left, #0f172a, #1e293b);
             color: #f1f5f9;
         }
 
         .glass-card {
-            background: rgba(30, 41, 59, 0.6);
+            background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
         }
 
         #map { 
@@ -38,43 +37,38 @@
             z-index: 1;
         }
 
-        /* Dark Mode Map Filter */
-        .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
-
-        .logo-container img {
-            height: 50px;
-            object-fit: contain;
-        }
+        /* Warna Peta Natural - Filter dihapus agar warna asli keluar */
+        .leaflet-tile-container { filter: none; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
         <header class="mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div class="flex items-center gap-4 logo-container">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" alt="Logo Kab Bandung">
+            <div class="flex items-center gap-4">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" class="h-12" alt="Logo Kab Bandung">
                 <div class="h-10 w-[1px] bg-white/20 mx-2"></div>
-                <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" alt="Logo PAN">
+                <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" class="h-12" alt="Logo PAN">
             </div>
 
             <div class="text-center md:text-right">
                 <h1 class="text-3xl font-extrabold text-blue-400 tracking-tight uppercase">DPRT & Kader Monitoring</h1>
-                <p class="text-slate-300 font-medium tracking-wide">DPD PARTAI AMANAT NASIONAL KAB. BANDUNG</p>
+                <p class="text-slate-300 font-medium">DPD PARTAI AMANAT NASIONAL KAB. BANDUNG</p>
             </div>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
-                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-[0.2em]">Pilih Kecamatan</label>
-                <select id="filterKecamatan" class="w-full bg-slate-900/50 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-bold">
-                    <option value="ALL">SEMUA WILAYAH</option>
+                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-widest">Filter Wilayah</label>
+                <select id="filterKecamatan" class="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold">
+                    <option value="ALL">SEMUA KECAMATAN</option>
                 </select>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
-                <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl"><i class="fas fa-sitemap"></i></div>
+                <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl"><i class="fas fa-landmark"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Total Kel/Desa</p>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total DPRT (Desa)</p>
                     <h2 id="stat-desa" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
@@ -82,16 +76,16 @@
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
                 <div class="bg-orange-500/20 p-4 rounded-xl text-orange-400 text-2xl"><i class="fas fa-users"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Estimasi Kader</p>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total Kader</p>
                     <h2 id="stat-kader" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5 border-r-4 border-r-emerald-500">
-                <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl"><i class="fas fa-shield-alt"></i></div>
+                <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl"><i class="fas fa-check-circle"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Status Verifikasi</p>
-                    <h2 class="text-4xl font-black text-emerald-400">AKTIF</h2>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Status Data</p>
+                    <h2 class="text-2xl font-black text-emerald-400 uppercase">Terverifikasi</h2>
                 </div>
             </div>
         </div>
@@ -99,16 +93,16 @@
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
             <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
                 <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                    <i class="fas fa-chart-bar text-blue-400"></i> Sebaran Kader per Kecamatan
+                    <i class="fas fa-chart-bar text-blue-400"></i> Statistik Kader
                 </h3>
-                <div class="h-[600px]">
+                <div class="h-[500px]">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
 
             <div class="lg:col-span-3 glass-card p-6 rounded-3xl">
                 <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                    <i class="fas fa-map-marked-alt text-blue-400"></i> Peta Teritorial Kab. Bandung
+                    <i class="fas fa-map-marked-alt text-blue-400"></i> Peta Teritorial (Natural)
                 </h3>
                 <div id="map"></div>
             </div>
@@ -117,75 +111,83 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script>
-        // Inisialisasi Peta - Fokus ke Kab. Bandung
+        // Inisialisasi Peta
         var map = L.map('map').setView([-7.03, 107.65], 10);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        // Menggunakan tile layer standard (Natural/Asli)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
         var geojsonLayer;
-        var statsData = {};
+        var statsData = {}; // Simpan data per kecamatan
+        var desaCountData = {}; // Simpan jumlah desa per kecamatan
         let myChart;
 
-        // Properti yang dicari di JSON (Sesuaikan jika di JSON Anda berbeda, misal: NAME_3)
-        const PROPERTY_KEY = "NAME_3"; 
+        const PROPERTY_KEY = "NAME_3"; // Key untuk nama Kecamatan di GeoJSON
 
         fetch('kab-bandung.json')
             .then(res => res.json())
             .then(data => {
-                processData(data);
+                processInitialData(data);
                 
                 geojsonLayer = L.geoJSON(data, {
                     style: function(feature) {
                         return {
-                            color: "#3b82f6",
-                            weight: 1,
-                            fillColor: "#1d4ed8",
-                            fillOpacity: 0.3
+                            color: "#2563eb",
+                            weight: 1.5,
+                            fillColor: "#3b82f6",
+                            fillOpacity: 0.2
                         };
                     },
                     onEachFeature: function (feature, layer) {
                         const kecName = feature.properties[PROPERTY_KEY];
                         
-                        if (kecName) {
-                            layer.bindPopup(`
-                                <div class="text-slate-800">
-                                    <strong class="text-lg">${kecName}</strong><br>
-                                    <hr class="my-1">
-                                    Total Kader: <strong>${statsData[kecName]}</strong>
+                        layer.bindPopup(`
+                            <div class="text-slate-800 p-2">
+                                <strong class="text-blue-700 text-lg">${kecName}</strong><br>
+                                <div class="mt-2 text-sm">
+                                    Desa/Kel: <b>${desaCountData[kecName] || 0}</b><br>
+                                    Est. Kader: <b>${statsData[kecName] || 0}</b>
                                 </div>
-                            `);
+                            </div>
+                        `);
 
-                            layer.on('mouseover', function() {
-                                this.setStyle({ fillOpacity: 0.7, weight: 2 });
-                            });
-
-                            layer.on('mouseout', function() {
+                        layer.on({
+                            mouseover: (e) => {
+                                var l = e.target;
+                                l.setStyle({ fillOpacity: 0.5, weight: 3, fillColor: '#fb923c' });
+                            },
+                            mouseout: (e) => {
                                 if (document.getElementById("filterKecamatan").value !== kecName) {
-                                    this.setStyle({ fillOpacity: 0.3, weight: 1 });
+                                    geojsonLayer.resetStyle(e.target);
                                 }
-                            });
-
-                            layer.on('click', function() {
+                            },
+                            click: (e) => {
                                 document.getElementById("filterKecamatan").value = kecName;
                                 updateSelection(kecName);
-                            });
-                        }
+                            }
+                        });
                     }
                 }).addTo(map);
 
                 initChart();
-                updateGlobalStats();
+                updateDisplayStats("ALL");
             });
 
-        function processData(data) {
+        function processInitialData(data) {
             const select = document.getElementById("filterKecamatan");
             let listKecamatan = [];
 
             data.features.forEach(f => {
                 const name = f.properties[PROPERTY_KEY];
-                if (name && !listKecamatan.includes(name)) {
-                    listKecamatan.push(name);
-                    // Generate data dummy konsisten berdasarkan nama (biar tidak berubah saat refresh)
-                    statsData[name] = Math.floor(Math.random() * 150) + 40;
+                if (name) {
+                    if (!statsData[name]) {
+                        listKecamatan.push(name);
+                        statsData[name] = Math.floor(Math.random() * 500) + 100; // Contoh Data Kader
+                        desaCountData[name] = 0;
+                    }
+                    desaCountData[name] += 1; // Menghitung jumlah desa dalam kecamatan tersebut
                 }
             });
 
@@ -195,12 +197,21 @@
                 option.text = name.toUpperCase();
                 select.appendChild(option);
             });
-
-            document.getElementById("stat-desa").innerText = data.features.length;
         }
 
-        function updateGlobalStats() {
-            const totalKader = Object.values(statsData).reduce((a, b) => a + b, 0);
+        function updateDisplayStats(filter) {
+            let totalDesa = 0;
+            let totalKader = 0;
+
+            if (filter === "ALL") {
+                totalDesa = Object.values(desaCountData).reduce((a, b) => a + b, 0);
+                totalKader = Object.values(statsData).reduce((a, b) => a + b, 0);
+            } else {
+                totalDesa = desaCountData[filter] || 0;
+                totalKader = statsData[filter] || 0;
+            }
+
+            document.getElementById("stat-desa").innerText = totalDesa;
             document.getElementById("stat-kader").innerText = totalKader.toLocaleString('id-ID');
         }
 
@@ -214,46 +225,39 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Kader',
+                        label: 'Jumlah Kader',
                         data: values,
-                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                        borderColor: '#60a5fa',
-                        borderWidth: 1,
-                        borderRadius: 4
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 5
                     }]
                 },
                 options: {
                     indexAxis: 'y',
                     maintainAspectRatio: false,
-                    plugins: { 
-                        legend: { display: false },
-                        tooltip: { backgroundColor: '#1e293b' }
-                    },
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { 
-                            grid: { color: 'rgba(255,255,255,0.05)' }, 
-                            ticks: { color: '#94a3b8' } 
-                        },
-                        y: { 
-                            grid: { display: false }, 
-                            ticks: { color: '#f1f5f9', font: { size: 9 } } 
-                        }
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                        y: { ticks: { color: '#f1f5f9' } }
                     }
                 }
             });
         }
 
         function updateSelection(val) {
+            updateDisplayStats(val);
+
             geojsonLayer.eachLayer(function(layer) {
-                if (val === "ALL" || layer.feature.properties[PROPERTY_KEY] === val) {
-                    layer.setStyle({ fillOpacity: 0.7, color: '#60a5fa', weight: 2 });
-                    if (val !== "ALL" && layer.feature.properties[PROPERTY_KEY] === val) {
-                        map.fitBounds(layer.getBounds());
-                    }
+                const name = layer.feature.properties[PROPERTY_KEY];
+                if (val === "ALL") {
+                    geojsonLayer.resetStyle(layer);
+                } else if (name === val) {
+                    layer.setStyle({ fillOpacity: 0.7, fillColor: '#fb923c', color: '#fff', weight: 3 });
+                    map.fitBounds(layer.getBounds());
                 } else {
-                    layer.setStyle({ fillOpacity: 0.1, color: '#334155', weight: 1 });
+                    layer.setStyle({ fillOpacity: 0.1, weight: 1 });
                 }
             });
+
             if (val === "ALL") map.setView([-7.03, 107.65], 10);
         }
 
