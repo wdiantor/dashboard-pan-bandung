@@ -7,7 +7,7 @@ let myChart = null;
 let map = null;
 let geojsonLayer = null;
 
-// Indeks Kolom: 1:Desa, 2:Kecamatan, 3:DPRT, 4:Kader
+// Indeks Kolom berdasarkan Sheet Anda
 const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
 
 async function initDashboard() {
@@ -17,6 +17,7 @@ async function initDashboard() {
         
         if (!data.values) return;
         
+        // Bersihkan data: Hilangkan baris kosong & standarisasi teks
         allData = data.values.filter(row => row.length >= 3).map(row => {
             if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
             if(row[idx.desa]) row[idx.desa] = row[idx.desa].trim().toUpperCase();
@@ -28,7 +29,8 @@ async function initDashboard() {
             .filter(val => val && isNaN(val))
             .sort();
         
-        select.innerHTML = '<option value="ALL">KABUPATEN BANDUNG (SEMUA)</option>';
+        // Reset dropdown
+        select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
             opt.value = kec;
@@ -36,7 +38,8 @@ async function initDashboard() {
             select.appendChild(opt);
         });
 
-        initMap(); // Inisialisasi peta dulu agar geojsonLayer siap
+        // Inisialisasi Peta & Data Pertama Kali
+        initMap();
         applyFilter();
 
     } catch (e) { 
@@ -47,28 +50,30 @@ async function initDashboard() {
 function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     
+    // Filter data berdasarkan pilihan
     const filtered = filterValue === "ALL" 
         ? allData 
         : allData.filter(row => row[idx.kec] === filterValue);
 
-    // 1. Update Statistik Atas
+    // 1. Update Kartu Statistik
     const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
     const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
     
     document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
 
-    // 2. Logika Update Peta (Zoom & Highlight)
+    // 2. Update Highlight & Zoom Peta
     if (geojsonLayer) {
         geojsonLayer.eachLayer(layer => {
             const name = (layer.feature.properties.KECAMATAN || layer.feature.properties.name || layer.feature.properties.NAMOBJ || "").toUpperCase().trim();
             
             if (filterValue === "ALL") {
                 geojsonLayer.resetStyle(layer);
-                map.setView([-7.0252, 107.5197], 10);
+                map.setView([-7.0252, 107.5197], 10); // Kembali ke zoom awal
             } else if (name === filterValue) {
+                // Beri warna biru pekat dan zoom ke kecamatan pilihan
                 layer.setStyle({
-                    fillColor: '#0054a6', // Biru pekat saat dipilih
+                    fillColor: '#0054a6',
                     fillOpacity: 0.9,
                     weight: 3,
                     color: 'white'
@@ -76,6 +81,7 @@ function applyFilter() {
                 layer.bringToFront();
                 map.fitBounds(layer.getBounds(), { padding: [20, 20] });
             } else {
+                // Wilayah lain dibuat transparan/pudar
                 layer.setStyle({
                     fillOpacity: 0.1,
                     weight: 1,
@@ -85,8 +91,9 @@ function applyFilter() {
         });
     }
 
-    // 3. Update Grafik
+    // 3. Siapkan Data untuk Chart
     let labels = [], dprtVals = [], kaderVals = [];
+
     if (filterValue === "ALL") {
         const summary = {};
         allData.forEach(row => {
@@ -101,6 +108,7 @@ function applyFilter() {
         dprtVals = labels.map(l => summary[l].d);
         kaderVals = labels.map(l => summary[l].k);
     } else {
+        // Tampilkan detail per desa jika kecamatan dipilih
         labels = filtered.map(row => row[idx.desa]);
         dprtVals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
         kaderVals = filtered.map(row => parseInt(row[idx.kader]) || 0);
@@ -119,7 +127,7 @@ function renderChart(labels, dprtData, kaderData) {
             labels: labels,
             datasets: [
                 {
-                    label: 'Kader',
+                    label: 'Total Kader',
                     data: kaderData,
                     backgroundColor: '#f97316',
                     borderRadius: 4,
@@ -145,8 +153,14 @@ function renderChart(labels, dprtData, kaderData) {
                 }
             },
             scales: {
-                y: { ticks: { color: '#1e293b', font: { size: 10, weight: 'bold' } }, grid: { display: false } },
-                x: { ticks: { color: '#1e293b' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+                y: { 
+                    ticks: { color: '#1e293b', font: { size: 10, weight: 'bold' } }, 
+                    grid: { display: false } 
+                },
+                x: { 
+                    ticks: { color: '#1e293b' }, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                }
             }
         }
     });
@@ -156,7 +170,7 @@ function initMap() {
     if (map) return;
     map = L.map('map', { zoomControl: true }).setView([-7.0252, 107.5197], 10);
     
-    // Basemap terang agar poligon biru terlihat jelas
+    // Gunakan Tile Layer yang lebih bersih/terang agar poligon terlihat
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
     fetch('kab-bandung.json')
@@ -167,16 +181,17 @@ function initMap() {
                 onEachFeature: (feature, layer) => {
                     let name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
                     
-                    // Logika pencarian data agar tidak 0
+                    // Hitung data untuk popup
                     const dataKec = allData.filter(row => row[idx.kec] === name);
                     const totalD = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
                     const totalK = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
 
                     layer.bindPopup(`
                         <div style="font-family: sans-serif;">
-                            <b style="color: #0054a6;">KEC. ${name}</b><br>
-                            DPRT Aktif: ${totalD}<br>
-                            Total Kader: ${totalK}
+                            <strong style="color: #0054a6; font-size: 14px;">KEC. ${name}</strong><br>
+                            <hr style="margin: 5px 0;">
+                            DPRT Aktif: <b>${totalD}</b><br>
+                            Total Kader: <b>${totalK}</b>
                         </div>
                     `);
                     
@@ -204,6 +219,7 @@ function styleMap(feature) {
 }
 
 function getColor(d) {
+    // Gradasi Biru berdasarkan jumlah DPRT
     return d > 1000 ? '#003366' : 
            d > 500  ? '#0054a6' : 
            d > 100  ? '#3b82f6' : 
@@ -211,4 +227,5 @@ function getColor(d) {
                       '#e2e8f0'; 
 }
 
+// Jalankan aplikasi
 initDashboard();
