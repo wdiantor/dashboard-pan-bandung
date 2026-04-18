@@ -1,6 +1,6 @@
 /**
  * Dashboard Pemenangan PAN Kab. Bandung
- * Fix: Auto-Zoom Map & Detail Desa Chart
+ * Final Fix: Zoom Teritorial & Detail Per-Desa
  */
 
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
@@ -42,35 +42,42 @@ async function initDashboard() {
             };
         }).filter(item => item.kec !== "");
 
-        initMap(); // Inisialisasi peta setelah data siap
+        initMap(); 
         populateDropdown();
-        applyFilter(); 
-
+        // applyFilter dipanggil di dalam fetch GeoJSON agar memastikan layer sudah ada
     } catch (e) { console.error("Error Dashboard:", e); }
 }
 
 function initMap() {
     if (map) return;
+    // Koordinat tengah Kabupaten Bandung
     map = L.map('map').setView([-7.0252, 107.5197], 10);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Memuat GeoJSON
     fetch('kab-bandung.json')
         .then(res => res.json())
         .then(geoData => {
             geojsonLayer = L.geoJson(geoData, {
-                style: { color: "#2563eb", weight: 1, fillOpacity: 0.2 },
+                style: { 
+                    color: "#2563eb", 
+                    weight: 1.5, 
+                    fillOpacity: 0.1, 
+                    fillColor: "#3b82f6" 
+                },
                 onEachFeature: (feature, layer) => {
                     layer.on('click', () => {
-                        const rawName = feature.properties.NAME_3 || feature.properties.KECAMATAN;
+                        const rawName = feature.properties.NAME_3 || feature.properties.KECAMATAN || feature.properties.NAMOBJ;
                         document.getElementById('filterKecamatan').value = rawName.toUpperCase();
                         applyFilter();
                     });
                 }
             }).addTo(map);
+            
+            // Panggil filter pertama kali setelah peta & GeoJSON siap
+            applyFilter();
         });
 }
 
@@ -92,11 +99,11 @@ function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     const filtered = filterValue === "ALL" ? allData : allData.filter(d => d.kec === filterValue);
 
-    // 1. Update Counter
+    // 1. Update Counter UI
     document.getElementById('stat-dprt').innerText = filtered.reduce((acc, d) => acc + d.dprt, 0).toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = filtered.reduce((acc, d) => acc + d.kader, 0).toLocaleString('id-ID');
 
-    // 2. Logika Zoom Peta (FITUR ZOOM)
+    // 2. Logika Zoom & Visual Teritorial
     if (geojsonLayer) {
         const filterClean = cleanName(filterValue);
         let targetLayer = null;
@@ -108,23 +115,33 @@ function applyFilter() {
             if (filterValue === "ALL") {
                 geojsonLayer.resetStyle(layer);
             } else if (nameClean === filterClean) {
-                targetLayer = layer; // Simpan layer yang cocok
-                layer.setStyle({ fillColor: '#0054a6', fillOpacity: 0.8, weight: 3, color: 'white' });
+                targetLayer = layer; 
+                // Highlight warna Orange PAN untuk kecamatan terpilih
+                layer.setStyle({ 
+                    fillColor: '#f97316', 
+                    fillOpacity: 0.7, 
+                    weight: 3, 
+                    color: 'white' 
+                });
                 layer.bringToFront();
             } else {
-                layer.setStyle({ fillOpacity: 0.1, weight: 1, color: '#ccc' });
+                // Pudarkan wilayah lain agar fokus
+                layer.setStyle({ 
+                    fillOpacity: 0.05, 
+                    weight: 1, 
+                    color: '#94a3b8' 
+                });
             }
         });
 
-        // Jalankan Zoom jika ditemukan kecamatannya
         if (targetLayer) {
-            map.fitBounds(targetLayer.getBounds(), { padding: [40, 40], animate: true });
+            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50], animate: true });
         } else if (filterValue === "ALL") {
             map.setView([-7.0252, 107.5197], 10);
         }
     }
 
-    // 3. Update Grafik (DPRT & KADER)
+    // 3. Update Grafik
     updateChartUI(filterValue, filtered);
 }
 
@@ -145,7 +162,7 @@ function updateChartUI(filterValue, filteredData) {
         dprtVals = labels.map(l => summary[l].d);
         kaderVals = labels.map(l => summary[l].k);
     } else {
-        // Tampilkan Detail PER DESA
+        // Sortir Desa berdasarkan Kader terbanyak
         const sorted = [...filteredData].sort((a, b) => b.kader - a.kader);
         labels = sorted.map(d => d.desa);
         dprtVals = sorted.map(d => d.dprt);
@@ -157,17 +174,30 @@ function updateChartUI(filterValue, filteredData) {
         data: {
             labels: labels,
             datasets: [
-                { label: 'DPRT Aktif', data: dprtVals, backgroundColor: '#0054a6' },
-                { label: 'Total Kader', data: kaderVals, backgroundColor: '#f97316' }
+                { 
+                    label: 'DPRT Aktif', 
+                    data: dprtVals, 
+                    backgroundColor: '#0054a6',
+                    barThickness: labels.length > 15 ? 10 : 20 
+                },
+                { 
+                    label: 'Total Kader', 
+                    data: kaderVals, 
+                    backgroundColor: '#f97316',
+                    barThickness: labels.length > 15 ? 10 : 20
+                }
             ]
         },
         options: {
             indexAxis: 'y',
             maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: '#fff' } } },
+            responsive: true,
+            plugins: { 
+                legend: { labels: { color: '#fff', font: { size: 12 } } } 
+            },
             scales: {
-                x: { ticks: { color: '#94a3b8' } },
-                y: { ticks: { color: '#fff', font: { size: 10 } } }
+                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                y: { ticks: { color: '#fff', font: { size: 10 } }, grid: { display: false } }
             }
         }
     });
