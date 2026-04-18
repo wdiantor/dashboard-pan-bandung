@@ -7,24 +7,25 @@ let myChart = null;
 let map = null;
 let geojsonLayer = null;
 
+// Indeks kolom sesuai data Anda
 const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
 
-// Pastikan skrip jalan setelah HTML siap
+// Pastikan skrip berjalan setelah seluruh HTML (DOM) siap
 document.addEventListener('DOMContentLoaded', () => {
     initDashboard();
 });
 
 async function initDashboard() {
     try {
-        console.log("Memulai loading data...");
         const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
         const data = await response.json();
         
         if (!data.values) {
-            console.error("Data tidak ditemukan di Google Sheets!");
+            console.error("Data Google Sheets tidak ditemukan.");
             return;
         }
         
+        // Bersihkan dan format data
         allData = data.values.filter(row => row.length >= 3).map(row => ({
             desa: (row[idx.desa] || "").trim().toUpperCase(),
             kec: (row[idx.kec] || "").trim().toUpperCase(),
@@ -32,6 +33,7 @@ async function initDashboard() {
             kader: parseInt(row[idx.kader]) || 0
         }));
 
+        // Isi Dropdown Kecamatan
         const select = document.getElementById('filterKecamatan');
         const kecamatanList = [...new Set(allData.map(d => d.kec))].filter(val => val && isNaN(val)).sort();
         
@@ -43,21 +45,21 @@ async function initDashboard() {
             select.appendChild(opt);
         });
 
-        // Inisialisasi Peta
+        // 1. Inisialisasi Peta Dahulu
         initMap();
-        // Jalankan filter pertama kali untuk mengisi angka & chart
-        applyFilter();
 
     } catch (e) { 
-        console.error("Gagal inisialisasi dashboard:", e); 
+        console.error("Error Dashboard Init:", e); 
     }
 }
 
 function initMap() {
-    const mapContainer = document.getElementById('map');
-    if (!mapContainer || map) return;
-
+    // Hindari inisialisasi ganda
+    if (map) return;
+    
     map = L.map('map', { zoomControl: true }).setView([-7.0252, 107.5197], 10);
+    
+    // Basemap terang agar poligon biru terlihat kontras
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
     fetch('kab-bandung.json')
@@ -67,32 +69,47 @@ function initMap() {
                 style: styleMap,
                 onEachFeature: (feature, layer) => {
                     const props = feature.properties;
+                    // Cek berbagai kemungkinan nama atribut di GeoJSON
                     const name = (props.KECAMATAN || props.name || props.NAMOBJ || "").toUpperCase().trim();
                     
                     const dataKec = allData.filter(d => d.kec === name);
                     const totalD = dataKec.reduce((acc, d) => acc + d.dprt, 0);
                     const totalK = dataKec.reduce((acc, d) => acc + d.kader, 0);
 
-                    layer.bindPopup(`<b>KEC. ${name}</b><br>DPRT: ${totalD}<br>Kader: ${totalK}`);
+                    layer.bindPopup(`
+                        <div style="color:#003366; font-family:sans-serif;">
+                            <b style="font-size:14px;">KEC. ${name}</b><hr style="margin:5px 0">
+                            DPRT: <b>${totalD}</b><br>
+                            Kader: <b>${totalK}</b>
+                        </div>
+                    `);
+                    
                     layer.on('click', () => {
                         document.getElementById('filterKecamatan').value = name;
                         applyFilter();
                     });
                 }
             }).addTo(map);
+
+            // 2. Jalankan applyFilter SETELAH GeoJSON berhasil dimuat
+            applyFilter();
         })
-        .catch(err => console.warn("File kab-bandung.json tidak ditemukan, peta tidak akan muncul."));
+        .catch(err => {
+            console.error("File kab-bandung.json tidak ditemukan.");
+            // Tetap jalankan filter agar chart dan angka muncul meski peta gagal
+            applyFilter();
+        });
 }
 
 function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     const filtered = filterValue === "ALL" ? allData : allData.filter(d => d.kec === filterValue);
 
-    // Update Angka Statistik
+    // Update Angka di Card
     document.getElementById('stat-dprt').innerText = filtered.reduce((acc, d) => acc + d.dprt, 0).toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = filtered.reduce((acc, d) => acc + d.kader, 0).toLocaleString('id-ID');
 
-    // Update Highlight Peta
+    // Update Visual Peta
     if (geojsonLayer) {
         geojsonLayer.eachLayer(layer => {
             const props = layer.feature.properties;
@@ -103,14 +120,14 @@ function applyFilter() {
             } else if (name === filterValue) {
                 layer.setStyle({ fillColor: '#0054a6', fillOpacity: 0.9, weight: 3, color: 'white' });
                 layer.bringToFront();
-                map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+                map.fitBounds(layer.getBounds(), { padding: [30, 30] });
             } else {
                 layer.setStyle({ fillOpacity: 0.1, weight: 1, color: '#cbd5e1' });
             }
         });
     }
 
-    // Update Grafik
+    // Update Chart
     updateChartUI(filterValue, filtered);
 }
 
@@ -119,6 +136,7 @@ function updateChartUI(filterValue, filteredData) {
     if (myChart) myChart.destroy();
 
     let labels, dprtVals, kaderVals;
+
     if (filterValue === "ALL") {
         const summary = {};
         allData.forEach(d => {
@@ -140,16 +158,20 @@ function updateChartUI(filterValue, filteredData) {
         data: {
             labels: labels,
             datasets: [
-                { label: 'Kader', data: kaderVals, backgroundColor: '#f97316', borderRadius: 4 },
-                { label: 'DPRT', data: dprtVals, backgroundColor: '#0054a6', borderRadius: 4 }
+                { label: 'Kader', data: kaderVals, backgroundColor: '#f97316', borderRadius: 4, barThickness: 8 },
+                { label: 'DPRT Aktif', data: dprtVals, backgroundColor: '#3b82f6', borderRadius: 4, barThickness: 8 }
             ]
         },
         options: {
             indexAxis: 'y',
             maintainAspectRatio: false,
+            responsive: true,
+            plugins: { 
+                legend: { labels: { color: '#f1f5f9', font: { weight: 'bold' } } } 
+            },
             scales: {
-                y: { ticks: { color: '#1e293b', font: { size: 9 } } },
-                x: { ticks: { color: '#1e293b' } }
+                y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } }
             }
         }
     });
@@ -164,5 +186,9 @@ function styleMap(feature) {
 }
 
 function getColor(d) {
-    return d > 1000 ? '#003366' : d > 500 ? '#0054a6' : d > 100 ? '#3b82f6' : d > 0 ? '#93c5fd' : '#e2e8f0';
+    return d > 1000 ? '#1e3a8a' : 
+           d > 500  ? '#1d4ed8' : 
+           d > 100  ? '#3b82f6' : 
+           d > 0    ? '#93c5fd' : 
+                      '#334155'; 
 }
