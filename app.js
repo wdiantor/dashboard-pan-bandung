@@ -17,7 +17,6 @@ async function initDashboard() {
         
         if (!data.values) return;
         
-        // Membersihkan data dari spasi tambahan
         allData = data.values.filter(row => row.length >= 3).map(row => {
             if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
             return row;
@@ -28,7 +27,7 @@ async function initDashboard() {
             .filter(val => val && isNaN(val))
             .sort();
         
-        select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
+        select.innerHTML = '<option value="ALL">KABUPATEN BANDUNG (SEMUA)</option>';
         kecamatanList.forEach(kec => {
             let opt = document.createElement('option');
             opt.value = kec;
@@ -51,52 +50,85 @@ function applyFilter() {
         ? allData 
         : allData.filter(row => row[idx.kec] === filterValue);
 
+    // Hitung Total untuk Stat Cards
     const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
     const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
     
     document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
     document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
 
-    let labels, vals;
+    let labels = [], dprtVals = [], kaderVals = [];
+
     if (filterValue === "ALL") {
         const summary = {};
         filtered.forEach(row => {
             const kec = row[idx.kec];
-            if(kec) summary[kec] = (summary[kec] || 0) + (parseInt(row[idx.dprt]) || 0);
+            if(kec) {
+                if(!summary[kec]) summary[kec] = { d: 0, k: 0 };
+                summary[kec].d += (parseInt(row[idx.dprt]) || 0);
+                summary[kec].k += (parseInt(row[idx.kader]) || 0);
+            }
         });
         labels = Object.keys(summary);
-        vals = Object.values(summary);
+        dprtVals = labels.map(l => summary[l].d);
+        kaderVals = labels.map(l => summary[l].k);
     } else {
+        // Jika filter per kecamatan, tampilkan data per desa
         labels = filtered.map(row => row[idx.desa]);
-        vals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
+        dprtVals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
+        kaderVals = filtered.map(row => parseInt(row[idx.kader]) || 0);
     }
 
-    renderChart(labels, vals);
+    renderChart(labels, dprtVals, kaderVals);
     if (geojsonLayer) geojsonLayer.resetStyle();
 }
 
-function renderChart(l, v) {
+function renderChart(labels, dprtData, kaderData) {
     const ctx = document.getElementById('panChart').getContext('2d');
     if (myChart) myChart.destroy();
 
     myChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: l,
-            datasets: [{
-                label: 'DPRT Aktif',
-                data: v,
-                backgroundColor: '#3b82f6',
-                borderRadius: 4
-            }]
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Kader',
+                    data: kaderData,
+                    backgroundColor: '#f97316', // Orange PAN
+                    borderRadius: 4,
+                    barThickness: 8
+                },
+                {
+                    label: 'DPRT Aktif',
+                    data: dprtData,
+                    backgroundColor: '#3b82f6', // Biru PAN
+                    borderRadius: 4,
+                    barThickness: 8
+                }
+            ]
         },
         options: {
             indexAxis: 'y',
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            responsive: true,
+            plugins: { 
+                legend: { 
+                    display: true, 
+                    position: 'top',
+                    labels: { color: '#f1f5f9', font: { weight: 'bold' } } 
+                },
+                tooltip: { backgroundColor: '#1e293b' }
+            },
             scales: {
-                y: { ticks: { color: '#94a3b8', autoSkip: false, font: { size: 9 } } },
-                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+                y: { 
+                    ticks: { color: '#94a3b8', autoSkip: false, font: { size: 9, weight: '600' } },
+                    grid: { display: false }
+                },
+                x: { 
+                    ticks: { color: '#94a3b8' }, 
+                    grid: { color: 'rgba(51, 65, 85, 0.5)' } 
+                }
             }
         }
     });
@@ -104,7 +136,8 @@ function renderChart(l, v) {
 
 function initMap() {
     if (map) return;
-    map = L.map('map').setView([-7.0252, 107.5197], 10);
+    map = L.map('map', { zoomControl: false }).setView([-7.0252, 107.5197], 10);
+    
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     fetch('kab-bandung.json')
@@ -113,18 +146,24 @@ function initMap() {
             geojsonLayer = L.geoJson(geoData, {
                 style: styleMap,
                 onEachFeature: (feature, layer) => {
-                    // Logika pencarian nama kecamatan yang lebih kuat
                     let name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
-                    
-                    // Jika nama yang muncul masih "BANDUNG", kita coba ambil dari properti lain jika ada
-                    if (name === "BANDUNG" && feature.properties.KEC) {
-                        name = feature.properties.KEC.toUpperCase().trim();
-                    }
+                    if (name === "BANDUNG" && feature.properties.KEC) name = feature.properties.KEC.toUpperCase().trim();
 
                     const dataKec = allData.filter(row => row[idx.kec] === name);
-                    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+                    const totalD = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+                    const totalK = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
 
-                    layer.bindPopup(`<b>KECAMATAN: ${name}</b><br>DPRT Aktif: ${total.toLocaleString('id-ID')}`);
+                    layer.bindPopup(`
+                        <div style="font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b;">
+                            <b style="font-size: 14px; color: #0054a6;">KEC. ${name}</b><br>
+                            <hr style="margin: 5px 0;">
+                            DPRT Aktif: <b>${totalD.toLocaleString('id-ID')}</b><br>
+                            Total Kader: <b>${totalK.toLocaleString('id-ID')}</b>
+                        </div>
+                    `);
+                    
+                    layer.on('mouseover', function() { this.setStyle({ fillOpacity: 0.9, weight: 3 }); });
+                    layer.on('mouseout', function() { this.setStyle({ fillOpacity: 0.7, weight: 1.5 }); });
                     
                     layer.on('click', () => {
                         const select = document.getElementById('filterKecamatan');
@@ -145,11 +184,20 @@ function styleMap(feature) {
     const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
     const dataKec = allData.filter(row => row[idx.kec] === name);
     const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-    return { fillColor: getColor(total), weight: 1.5, color: 'white', fillOpacity: 0.7 };
+    return { 
+        fillColor: getColor(total), 
+        weight: 1.5, 
+        color: '#0f172a', 
+        fillOpacity: 0.7 
+    };
 }
 
 function getColor(d) {
-    return d > 2000 ? '#1e3a8a' : d > 1000 ? '#1d4ed8' : d > 500 ? '#3b82f6' : d > 100 ? '#93c5fd' : '#334155'; 
+    return d > 2000 ? '#1e3a8a' : 
+           d > 1000 ? '#1d4ed8' : 
+           d > 500  ? '#3b82f6' : 
+           d > 100  ? '#93c5fd' : 
+                      '#334155'; 
 }
 
 initDashboard();
