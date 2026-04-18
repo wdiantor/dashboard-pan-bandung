@@ -1,30 +1,37 @@
 /**
  * Dashboard Pemenangan PAN Kab. Bandung
- * Ultra-Resilient Version: Anti-Error & Force Zoom
+ * Feature: Dapil Filter, Heatmap, & Leaderboard
  */
 
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
 const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A2:E500'; 
+const RANGE = 'Sheet1!A2:F500'; // Rentang diperluas ke kolom F (Dapil)
 
 let allData = [];
 let myChart = null;
 let map = null;
 let geojsonLayer = null;
 
-const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
+// Kolom: ID(0), Desa(1), Kec(2), DPRT(3), Kader(4), Dapil(5)
+const idx = { desa: 1, kec: 2, dprt: 3, kader: 4, dapil: 5 };
 
-// Fungsi pembersih teks yang lebih kuat
 const cleanName = (str) => {
     return (str || "").toString()
         .toUpperCase()
-        .replace(/KECAMATAN|KEC\./g, '') // Hilangkan kata "Kecamatan" jika ada di JSON
+        .replace(/KECAMATAN|KEC\./g, '')
         .replace(/[^A-Z0-9]/g, '')
         .trim();
 };
 
+// Fungsi warna Heatmap (Sesuaikan angka targetnya di sini)
+function getHeatmapColor(kader) {
+    return kader > 500 ? '#22c55e' : // Hijau (>500)
+           kader > 200 ? '#eab308' : // Kuning (201-500)
+                         '#ef4444';   // Merah (0-200)
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    initMap(); // Peta dijalankan duluan agar tidak bergantung pada Sheets
+    initMap();
     initDashboard();
 });
 
@@ -37,7 +44,7 @@ function initMap() {
         .then(res => res.json())
         .then(geoData => {
             geojsonLayer = L.geoJson(geoData, {
-                style: { color: "#2563eb", weight: 1.5, fillOpacity: 0.1, fillColor: "#3b82f6" },
+                style: { color: "#2563eb", weight: 1.5, fillOpacity: 0.2, fillColor: "#3b82f6" },
                 onEachFeature: (feature, layer) => {
                     layer.on('click', () => {
                         const p = feature.properties;
@@ -60,7 +67,6 @@ async function initDashboard() {
         if (!data.values) return;
 
         allData = data.values.map(row => {
-            // Fungsi pembersih angka agar tidak error jika ada titik/koma/spasi
             const parseNum = (val) => {
                 if (!val) return 0;
                 let clean = val.toString().replace(/[^0-9]/g, '');
@@ -70,14 +76,32 @@ async function initDashboard() {
             return {
                 desa: (row[idx.desa] || "TANPA NAMA").toString().trim().toUpperCase(),
                 kec: (row[idx.kec] || "").toString().trim().toUpperCase(),
+                dapil: (row[idx.dapil] || "TIDAK ADA").toString().trim().toUpperCase(),
                 dprt: parseNum(row[idx.dprt]),
                 kader: parseNum(row[idx.kader])
             };
         }).filter(item => item.kec !== "");
 
+        populateDapilDropdown();
         populateDropdown();
         applyFilter();
     } catch (e) { console.error("Sheets Data Error:", e); }
+}
+
+function populateDapilDropdown() {
+    const select = document.getElementById('filterDapil');
+    if (!select) return;
+    const dapilList = [...new Set(allData.map(d => d.dapil))].sort();
+    select.innerHTML = '<option value="ALL">SEMUA DAPIL</option>';
+    dapilList.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d; opt.textContent = d;
+        select.appendChild(opt);
+    });
+    select.addEventListener('change', () => {
+        document.getElementById('filterKecamatan').value = 'ALL';
+        applyFilter();
+    });
 }
 
 function populateDropdown() {
@@ -93,30 +117,40 @@ function populateDropdown() {
 }
 
 function applyFilter() {
-    const filterValue = document.getElementById('filterKecamatan').value;
-    const filtered = filterValue === "ALL" ? allData : allData.filter(d => d.kec === filterValue);
+    const dapilValue = document.getElementById('filterDapil').value;
+    const kecValue = document.getElementById('filterKecamatan').value;
 
-    // Update Angka (dengan proteksi Nan)
-    const totalDprt = filtered.reduce((acc, d) => acc + d.dprt, 0);
-    const totalKader = filtered.reduce((acc, d) => acc + d.kader, 0);
-    
-    document.getElementById('stat-dprt').innerText = totalDprt.toLocaleString('id-ID');
-    document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
+    let filtered = allData;
+    if (dapilValue !== "ALL") filtered = filtered.filter(d => d.dapil === dapilValue);
+    if (kecValue !== "ALL") filtered = filtered.filter(d => d.kec === kecValue);
 
-    // Force Map Update
+    // Update Counter
+    document.getElementById('stat-dprt').innerText = filtered.reduce((acc, d) => acc + d.dprt, 0).toLocaleString('id-ID');
+    document.getElementById('stat-kader').innerText = filtered.reduce((acc, d) => acc + d.kader, 0).toLocaleString('id-ID');
+
+    // Logic Heatmap & Zoom
     if (geojsonLayer) {
         let targetLayer = null;
-        const filterClean = cleanName(filterValue);
+        const kecClean = cleanName(kecValue);
 
         geojsonLayer.eachLayer(layer => {
             const p = layer.feature.properties;
             const geoName = cleanName(p.NAME_3 || p.KECAMATAN || p.NAMOBJ);
+            
+            // Hitung kekuatan per kecamatan untuk Heatmap
+            const kecStats = allData.filter(d => cleanName(d.kec) === geoName);
+            const totalKaderKec = kecStats.reduce((acc, d) => acc + d.kader, 0);
 
-            if (filterValue === "ALL") {
-                geojsonLayer.resetStyle(layer);
-            } else if (geoName === filterClean) {
+            if (kecValue === "ALL") {
+                layer.setStyle({
+                    fillColor: getHeatmapColor(totalKaderKec),
+                    fillOpacity: 0.5,
+                    weight: 1,
+                    color: '#fff'
+                });
+            } else if (geoName === kecClean) {
                 targetLayer = layer;
-                layer.setStyle({ fillColor: '#f97316', fillOpacity: 0.7, weight: 3, color: 'white' });
+                layer.setStyle({ fillColor: '#f97316', fillOpacity: 0.8, weight: 3, color: 'white' });
                 layer.bringToFront();
             } else {
                 layer.setStyle({ fillOpacity: 0.05, weight: 1, color: '#94a3b8' });
@@ -125,11 +159,33 @@ function applyFilter() {
 
         if (targetLayer) {
             map.fitBounds(targetLayer.getBounds(), { padding: [50, 50] });
-        } else if (filterValue === "ALL") {
+        } else if (kecValue === "ALL") {
             map.setView([-7.0252, 107.5197], 10);
         }
     }
-    updateChartUI(filterValue, filtered);
+
+    updateLeaderboard(filtered);
+    updateChartUI(kecValue, filtered);
+}
+
+function updateLeaderboard(data) {
+    const sorted = [...data].sort((a, b) => b.kader - a.kader);
+    const top5 = sorted.slice(0, 5);
+    const bottom5 = sorted.slice(-5).reverse();
+
+    const render = (list, containerId, colorClass) => {
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        container.innerHTML = list.map((d, i) => `
+            <div class="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                <span class="text-sm"><b class="${colorClass}">#${i+1}</b> ${d.desa}</span>
+                <span class="font-bold">${d.kader.toLocaleString()}</span>
+            </div>
+        `).join('');
+    };
+
+    render(top5, 'top-leaderboard', 'text-emerald-400');
+    render(bottom5, 'bottom-leaderboard', 'text-rose-400');
 }
 
 function updateChartUI(filterValue, filteredData) {
@@ -142,7 +198,7 @@ function updateChartUI(filterValue, filteredData) {
 
     if (filterValue === "ALL") {
         const summary = {};
-        allData.forEach(d => {
+        filteredData.forEach(d => {
             if(!summary[d.kec]) summary[d.kec] = { d: 0, k: 0 };
             summary[d.kec].d += d.dprt;
             summary[d.kec].k += d.kader;
