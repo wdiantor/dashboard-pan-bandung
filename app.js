@@ -1,6 +1,6 @@
 /**
  * Dashboard Pemenangan PAN Kab. Bandung
- * Ultra-Fix: Auto-Matching GeoJSON & Zoom
+ * Ultra-Resilient Version: Anti-Error & Force Zoom
  */
 
 const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
@@ -14,41 +14,23 @@ let geojsonLayer = null;
 
 const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
 
-const cleanName = (str) => (str || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+// Fungsi pembersih teks yang lebih kuat
+const cleanName = (str) => {
+    return (str || "").toString()
+        .toUpperCase()
+        .replace(/KECAMATAN|KEC\./g, '') // Hilangkan kata "Kecamatan" jika ada di JSON
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+};
 
 document.addEventListener('DOMContentLoaded', () => {
+    initMap(); // Peta dijalankan duluan agar tidak bergantung pada Sheets
     initDashboard();
 });
-
-async function initDashboard() {
-    try {
-        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
-        const data = await response.json();
-        
-        if (!data.values) return;
-
-        allData = data.values.map(row => {
-            const parseNum = (val) => {
-                if (!val) return 0;
-                return parseInt(val.toString().replace(/\./g, '').replace(/,/g, '')) || 0;
-            };
-            return {
-                desa: (row[idx.desa] || "").trim().toUpperCase(),
-                kec: (row[idx.kec] || "").trim().toUpperCase(),
-                dprt: parseNum(row[idx.dprt]),
-                kader: parseNum(row[idx.kader])
-            };
-        }).filter(item => item.kec !== "");
-
-        initMap(); 
-        populateDropdown();
-    } catch (e) { console.error("Gagal Load Data:", e); }
-}
 
 function initMap() {
     if (map) return;
     map = L.map('map').setView([-7.0252, 107.5197], 10);
-    
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     fetch('kab-bandung.json')
@@ -58,18 +40,44 @@ function initMap() {
                 style: { color: "#2563eb", weight: 1.5, fillOpacity: 0.1, fillColor: "#3b82f6" },
                 onEachFeature: (feature, layer) => {
                     layer.on('click', () => {
-                        // Cek semua kemungkinan label nama kecamatan di file JSON
                         const p = feature.properties;
-                        const rawName = p.NAME_3 || p.KECAMATAN || p.NAMOBJ || p.name;
-                        if(rawName) {
-                            document.getElementById('filterKecamatan').value = rawName.toUpperCase();
+                        const name = p.NAME_3 || p.KECAMATAN || p.NAMOBJ;
+                        if(name) {
+                            document.getElementById('filterKecamatan').value = name.toUpperCase();
                             applyFilter();
                         }
                     });
                 }
             }).addTo(map);
-            applyFilter();
-        }).catch(err => console.error("File kab-bandung.json tidak ditemukan atau rusak!"));
+        }).catch(err => console.error("GeoJSON Load Error"));
+}
+
+async function initDashboard() {
+    try {
+        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
+        const data = await response.json();
+        
+        if (!data.values) return;
+
+        allData = data.values.map(row => {
+            // Fungsi pembersih angka agar tidak error jika ada titik/koma/spasi
+            const parseNum = (val) => {
+                if (!val) return 0;
+                let clean = val.toString().replace(/[^0-9]/g, '');
+                return parseInt(clean) || 0;
+            };
+
+            return {
+                desa: (row[idx.desa] || "TANPA NAMA").toString().trim().toUpperCase(),
+                kec: (row[idx.kec] || "").toString().trim().toUpperCase(),
+                dprt: parseNum(row[idx.dprt]),
+                kader: parseNum(row[idx.kader])
+            };
+        }).filter(item => item.kec !== "");
+
+        populateDropdown();
+        applyFilter();
+    } catch (e) { console.error("Sheets Data Error:", e); }
 }
 
 function populateDropdown() {
@@ -88,22 +96,25 @@ function applyFilter() {
     const filterValue = document.getElementById('filterKecamatan').value;
     const filtered = filterValue === "ALL" ? allData : allData.filter(d => d.kec === filterValue);
 
-    // Update Angka
-    document.getElementById('stat-dprt').innerText = filtered.reduce((acc, d) => acc + d.dprt, 0).toLocaleString('id-ID');
-    document.getElementById('stat-kader').innerText = filtered.reduce((acc, d) => acc + d.kader, 0).toLocaleString('id-ID');
+    // Update Angka (dengan proteksi Nan)
+    const totalDprt = filtered.reduce((acc, d) => acc + d.dprt, 0);
+    const totalKader = filtered.reduce((acc, d) => acc + d.kader, 0);
+    
+    document.getElementById('stat-dprt').innerText = totalDprt.toLocaleString('id-ID');
+    document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
 
+    // Force Map Update
     if (geojsonLayer) {
         let targetLayer = null;
         const filterClean = cleanName(filterValue);
 
         geojsonLayer.eachLayer(layer => {
             const p = layer.feature.properties;
-            // Deteksi otomatis label nama di JSON
-            const nameFromGeojson = cleanName(p.NAME_3 || p.KECAMATAN || p.NAMOBJ || p.name);
+            const geoName = cleanName(p.NAME_3 || p.KECAMATAN || p.NAMOBJ);
 
             if (filterValue === "ALL") {
                 geojsonLayer.resetStyle(layer);
-            } else if (nameFromGeojson === filterClean) {
+            } else if (geoName === filterClean) {
                 targetLayer = layer;
                 layer.setStyle({ fillColor: '#f97316', fillOpacity: 0.7, weight: 3, color: 'white' });
                 layer.bringToFront();
@@ -113,7 +124,7 @@ function applyFilter() {
         });
 
         if (targetLayer) {
-            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50], animate: true });
+            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50] });
         } else if (filterValue === "ALL") {
             map.setView([-7.0252, 107.5197], 10);
         }
@@ -122,7 +133,9 @@ function applyFilter() {
 }
 
 function updateChartUI(filterValue, filteredData) {
-    const ctx = document.getElementById('panChart').getContext('2d');
+    const canvas = document.getElementById('panChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (myChart) myChart.destroy();
 
     let labels = [], dprtVals = [], kaderVals = [];
