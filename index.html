@@ -34,11 +34,12 @@
             width: 100%; 
             border-radius: 1.5rem; 
             z-index: 1;
+            /* Memastikan peta tidak abu-abu saat load */
+            background: #0f172a;
         }
 
-        /* Custom Dropdown Styling */
         select option {
-            background: #0f172a;
+            background: #1e293b;
             color: white;
         }
 
@@ -78,7 +79,7 @@
                     <i class="fas fa-landmark"></i>
                 </div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total DPRT Aktif</p>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Jumlah DPRT Aktif</p>
                     <h2 id="stat-dprt" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
@@ -108,9 +109,9 @@
             <div class="lg:col-span-2 glass-card p-6 rounded-3xl overflow-hidden">
                 <div class="flex items-center justify-between mb-6">
                     <h3 class="font-bold text-lg text-white flex items-center gap-2">
-                        <i class="fas fa-chart-line text-blue-400"></i> Statistik Wilayah
+                        <i class="fas fa-chart-line text-blue-400"></i> Statistik Kekuatan
                     </h3>
-                    <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md font-bold uppercase tracking-widest">Bar Chart</span>
+                    <span id="chart-label" class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md font-bold uppercase tracking-widest">Per Desa</span>
                 </div>
                 <div class="h-[500px] relative">
                     <canvas id="panChart"></canvas>
@@ -119,7 +120,7 @@
 
             <div class="lg:col-span-3 glass-card p-6 rounded-3xl">
                 <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                    <i class="fas fa-map-marked-alt text-blue-400"></i> Pemetaan Geografis
+                    <i class="fas fa-map-marked-alt text-blue-400"></i> Pemetaan Teritorial
                 </h3>
                 <div id="map"></div>
             </div>
