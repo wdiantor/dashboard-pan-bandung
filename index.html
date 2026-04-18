@@ -3,165 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard DPD PAN Kab. Bandung</title>
+    <title>Dashboard PAN Kab. Bandung</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 
     <style>
-        :root {
-            --bg-deep: #0f172a;
-            --bg-card: #1e293b;
-            --border: #334155;
-            --pan-blue: #3b82f6;
-        }
-
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-deep);
-            color: #f8fafc;
-        }
-
-        /* Container peta */
+        /* Container peta harus memiliki tinggi yang pasti */
         #map { 
-            height: 550px; 
+            height: 600px; 
             width: 100%; 
             border-radius: 1rem; 
-            z-index: 1;
-            background: var(--bg-deep);
+            z-index: 1; 
         }
 
-        /* Memaksa peta menjadi dark mode via filter CSS */
-        .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
+        /* Memastikan dropdown berada di atas elemen lain */
+        #filterKecamatan { z-index: 10; position: relative; }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-deep); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        /* Custom Scrollbar untuk desain yang lebih modern */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
-        .logo-header {
-            height: 55px;
-            filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.3));
-            transition: transform 0.3s;
+        /* Style untuk legenda peta */
+        .info.legend {
+            background: rgba(30, 41, 59, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            color: #94a3b8;
+            font-size: 12px;
+            line-height: 18px;
+            border: 1px solid #334155;
         }
-        
-        .logo-header:hover { transform: scale(1.05); }
-
-        .stat-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .stat-card:hover {
-            border-color: var(--pan-blue);
-            transform: translateY(-2px);
+        .info.legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+            border-radius: 2px;
         }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-8">
+<body class="bg-slate-900 text-slate-200 min-h-screen p-4 md:p-8">
 
     <div class="max-w-7xl mx-auto">
-        <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div class="flex items-center gap-5">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" alt="Kab Bandung" class="logo-header">
-                <div class="h-10 w-[1px] bg-slate-700 hidden md:block"></div>
-                <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" alt="PAN" class="logo-header">
-                
-                <div class="ml-2">
-                    <h1 class="text-3xl font-black text-blue-500 tracking-tight leading-none">DASHBOARD DPD PAN</h1>
-                    <p class="text-slate-400 font-medium text-sm mt-1">Monitoring Sebaran DPRT & Kader Kab. Bandung</p>
-                </div>
+        <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-black text-blue-500 tracking-tight">DASHBOARD DPD PAN</h1>
+                <p class="text-slate-400 font-medium">Monitoring Sebaran DPRT & Kader Kab. Bandung</p>
             </div>
-            
-            <div class="flex flex-col items-end gap-2">
-                <div class="bg-slate-800/50 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700 text-[10px] text-slate-400 uppercase tracking-widest">
-                    Update Terakhir: <span class="text-blue-400 font-bold">Real-time (Sheets)</span>
-                </div>
+            <div class="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 text-xs text-slate-400">
+                Data Terakhir: <span class="text-blue-400 font-bold">Real-time (Sheets)</span>
             </div>
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="stat-card p-6 rounded-2xl shadow-xl">
-                <label class="block text-[10px] text-slate-500 mb-3 font-black uppercase tracking-[0.2em]">Filter Wilayah</label>
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                <label class="block text-xs text-slate-500 mb-2 font-black uppercase tracking-widest">Filter Wilayah</label>
                 <select id="filterKecamatan" onchange="applyFilter()" 
-                    class="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer font-bold text-sm">
+                    class="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer">
                     <option value="ALL">SEMUA KECAMATAN</option>
                 </select>
             </div>
 
-            <div class="stat-card p-6 rounded-2xl shadow-xl flex items-center gap-5">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex items-center gap-4">
                 <div class="bg-blue-500/10 p-4 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                 </div>
                 <div>
-                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">DPRT Aktif</p>
+                    <p class="text-slate-500 text-xs font-black uppercase tracking-widest">DPRT Aktif</p>
                     <h2 id="stat-dprt" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
-            <div class="stat-card p-6 rounded-2xl shadow-xl flex items-center gap-5">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex items-center gap-4">
                 <div class="bg-orange-500/10 p-4 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 15.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 </div>
                 <div>
-                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Total Kader</p>
+                    <p class="text-slate-500 text-xs font-black uppercase tracking-widest">Total Kader</p>
                     <h2 id="stat-kader" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
-            <div class="stat-card p-6 rounded-2xl shadow-xl flex items-center gap-5 border-r-4 border-r-emerald-500">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex items-center gap-4">
                 <div class="bg-emerald-500/10 p-4 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                 </div>
                 <div>
-                    <p class="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Target Tercapai</p>
-                    <h2 class="text-4xl font-black text-emerald-400">100%</h2>
+                    <p class="text-slate-500 text-xs font-black uppercase tracking-widest">Target Tercapai</p>
+                    <h2 class="text-4xl font-black text-white">100%</h2>
                 </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
             <div class="lg:col-span-2 bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl">
-                <div class="flex items-center justify-between mb-8">
-                    <h3 class="font-bold text-lg text-white tracking-tight">Grafik Sebaran Data</h3>
-                    <span class="text-[9px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md uppercase font-black border border-blue-500/30">Bar Chart</span>
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="font-bold text-lg text-white">Grafik Sebaran Data</h3>
+                    <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-md uppercase font-bold">Bar Chart</span>
                 </div>
-                <div class="h-[600px] overflow-y-auto custom-scrollbar">
+                <div class="h-[750px] overflow-y-auto pr-2">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
 
             <div class="lg:col-span-3 bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-2xl">
                 <div class="flex items-center justify-between mb-6">
-                    <h3 class="font-bold text-lg text-white tracking-tight text-center">Peta Wilayah Kerja</h3>
+                    <h3 class="font-bold text-lg text-white">Peta Wilayah Kerja</h3>
                     <div class="flex gap-2">
-                        <span class="text-[9px] bg-slate-700 text-slate-300 px-2 py-1 rounded-md uppercase font-black">Kecamatan</span>
-                        <span class="text-[9px] bg-slate-700 text-slate-300 px-2 py-1 rounded-md uppercase font-black">Kab. Bandung</span>
+                        <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded-md uppercase font-bold">Kab. Bandung</span>
                     </div>
                 </div>
-                
                 <div id="map"></div>
-
-                <div class="mt-6">
-                   <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 text-center">Kerapatan DPRT Aktif</p>
-                   <div class="grid grid-cols-5 gap-2 text-[9px] font-bold text-center uppercase">
-                       <div class="flex flex-col gap-1 italic"><div class="h-2 rounded bg-[#334155]"></div>0</div>
-                       <div class="flex flex-col gap-1"><div class="h-2 rounded bg-[#93c5fd]"></div>100+</div>
-                       <div class="flex flex-col gap-1"><div class="h-2 rounded bg-[#3b82f6]"></div>500+</div>
-                       <div class="flex flex-col gap-1"><div class="h-2 rounded bg-[#1d4ed8]"></div>1000+</div>
-                       <div class="flex flex-col gap-1"><div class="h-2 rounded bg-[#1e3a8a]"></div>2000+</div>
-                   </div>
+                <div class="mt-4 grid grid-cols-5 gap-1 text-[10px] font-bold text-center">
+                    <div class="p-1 rounded bg-[#334155] text-white">0</div>
+                    <div class="p-1 rounded bg-[#93c5fd] text-slate-900">100+</div>
+                    <div class="p-1 rounded bg-[#3b82f6] text-white">500+</div>
+                    <div class="p-1 rounded bg-[#1d4ed8] text-white">1000+</div>
+                    <div class="p-1 rounded bg-[#1e3a8a] text-white">2000+</div>
                 </div>
             </div>
         </div>
