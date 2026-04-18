@@ -8,9 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg">    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         :root {
@@ -28,6 +27,7 @@
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
         }
 
         #map { 
@@ -37,8 +37,13 @@
             z-index: 1;
         }
 
-        /* Warna Peta Natural - Filter dihapus agar warna asli keluar */
-        .leaflet-tile-container { filter: none; }
+        /* Customize Leaflet Popup */
+        .leaflet-popup-content-wrapper {
+            background: #1e293b;
+            color: white;
+            border-radius: 12px;
+        }
+        .leaflet-popup-tip { background: #1e293b; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
@@ -61,15 +66,15 @@
             <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
                 <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-widest">Filter Wilayah</label>
                 <select id="filterKecamatan" class="w-full bg-slate-900 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold">
-                    <option value="ALL">SEMUA KECAMATAN</option>
+                    <option value="ALL">MEMUAT DATA...</option>
                 </select>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
                 <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl"><i class="fas fa-landmark"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total DPRT (Desa)</p>
-                    <h2 id="stat-desa" class="text-4xl font-black text-white">0</h2>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total DPRT Aktif</p>
+                    <h2 id="stat-dprt" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
@@ -85,7 +90,7 @@
                 <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl"><i class="fas fa-check-circle"></i></div>
                 <div>
                     <p class="text-[10px] text-slate-400 font-black uppercase tracking-widest">Status Data</p>
-                    <h2 class="text-2xl font-black text-emerald-400 uppercase">Terverifikasi</h2>
+                    <h2 class="text-2xl font-black text-emerald-400 uppercase">Live Sheets</h2>
                 </div>
             </div>
         </div>
@@ -93,177 +98,24 @@
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
             <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
                 <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                    <i class="fas fa-chart-bar text-blue-400"></i> Statistik Kader
+                    <i class="fas fa-chart-bar text-blue-400"></i> Distribusi Kekuatan
                 </h3>
-                <div class="h-[500px]">
+                <div class="h-[500px] relative">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
 
             <div class="lg:col-span-3 glass-card p-6 rounded-3xl">
                 <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
-                    <i class="fas fa-map-marked-alt text-blue-400"></i> Peta Teritorial (Natural)
+                    <i class="fas fa-map-marked-alt text-blue-400"></i> Pemetaan Teritorial
                 </h3>
                 <div id="map"></div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
-    <script>
-        // Inisialisasi Peta
-        var map = L.map('map').setView([-7.03, 107.65], 10);
-        
-        // Menggunakan tile layer standard (Natural/Asli)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        var geojsonLayer;
-        var statsData = {}; // Simpan data per kecamatan
-        var desaCountData = {}; // Simpan jumlah desa per kecamatan
-        let myChart;
-
-        const PROPERTY_KEY = "NAME_3"; // Key untuk nama Kecamatan di GeoJSON
-
-        fetch('kab-bandung.json')
-            .then(res => res.json())
-            .then(data => {
-                processInitialData(data);
-                
-                geojsonLayer = L.geoJSON(data, {
-                    style: function(feature) {
-                        return {
-                            color: "#2563eb",
-                            weight: 1.5,
-                            fillColor: "#3b82f6",
-                            fillOpacity: 0.2
-                        };
-                    },
-                    onEachFeature: function (feature, layer) {
-                        const kecName = feature.properties[PROPERTY_KEY];
-                        
-                        layer.bindPopup(`
-                            <div class="text-slate-800 p-2">
-                                <strong class="text-blue-700 text-lg">${kecName}</strong><br>
-                                <div class="mt-2 text-sm">
-                                    Desa/Kel: <b>${desaCountData[kecName] || 0}</b><br>
-                                    Est. Kader: <b>${statsData[kecName] || 0}</b>
-                                </div>
-                            </div>
-                        `);
-
-                        layer.on({
-                            mouseover: (e) => {
-                                var l = e.target;
-                                l.setStyle({ fillOpacity: 0.5, weight: 3, fillColor: '#fb923c' });
-                            },
-                            mouseout: (e) => {
-                                if (document.getElementById("filterKecamatan").value !== kecName) {
-                                    geojsonLayer.resetStyle(e.target);
-                                }
-                            },
-                            click: (e) => {
-                                document.getElementById("filterKecamatan").value = kecName;
-                                updateSelection(kecName);
-                            }
-                        });
-                    }
-                }).addTo(map);
-
-                initChart();
-                updateDisplayStats("ALL");
-            });
-
-        function processInitialData(data) {
-            const select = document.getElementById("filterKecamatan");
-            let listKecamatan = [];
-
-            data.features.forEach(f => {
-                const name = f.properties[PROPERTY_KEY];
-                if (name) {
-                    if (!statsData[name]) {
-                        listKecamatan.push(name);
-                        statsData[name] = Math.floor(Math.random() * 500) + 100; // Contoh Data Kader
-                        desaCountData[name] = 0;
-                    }
-                    desaCountData[name] += 1; // Menghitung jumlah desa dalam kecamatan tersebut
-                }
-            });
-
-            listKecamatan.sort().forEach(name => {
-                let option = document.createElement("option");
-                option.value = name;
-                option.text = name.toUpperCase();
-                select.appendChild(option);
-            });
-        }
-
-        function updateDisplayStats(filter) {
-            let totalDesa = 0;
-            let totalKader = 0;
-
-            if (filter === "ALL") {
-                totalDesa = Object.values(desaCountData).reduce((a, b) => a + b, 0);
-                totalKader = Object.values(statsData).reduce((a, b) => a + b, 0);
-            } else {
-                totalDesa = desaCountData[filter] || 0;
-                totalKader = statsData[filter] || 0;
-            }
-
-            document.getElementById("stat-desa").innerText = totalDesa;
-            document.getElementById("stat-kader").innerText = totalKader.toLocaleString('id-ID');
-        }
-
-        function initChart() {
-            const ctx = document.getElementById('panChart').getContext('2d');
-            const labels = Object.keys(statsData).sort();
-            const values = labels.map(l => statsData[l]);
-
-            myChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Jumlah Kader',
-                        data: values,
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 5
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-                        y: { ticks: { color: '#f1f5f9' } }
-                    }
-                }
-            });
-        }
-
-        function updateSelection(val) {
-            updateDisplayStats(val);
-
-            geojsonLayer.eachLayer(function(layer) {
-                const name = layer.feature.properties[PROPERTY_KEY];
-                if (val === "ALL") {
-                    geojsonLayer.resetStyle(layer);
-                } else if (name === val) {
-                    layer.setStyle({ fillOpacity: 0.7, fillColor: '#fb923c', color: '#fff', weight: 3 });
-                    map.fitBounds(layer.getBounds());
-                } else {
-                    layer.setStyle({ fillOpacity: 0.1, weight: 1 });
-                }
-            });
-
-            if (val === "ALL") map.setView([-7.03, 107.65], 10);
-        }
-
-        document.getElementById("filterKecamatan").addEventListener("change", function(e) {
-            updateSelection(e.target.value);
-        });
-    </script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
