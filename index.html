@@ -66,14 +66,36 @@
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
-                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-widest text-blue-400">Pilih Kecamatan</label>
-                <select id="filterKecamatan" class="w-full bg-slate-900/50 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold transition-all cursor-pointer">
-                    <option value="ALL">MEMUAT DATA...</option>
-                </select>
-            </div>
+       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
+        <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase tracking-widest">Filter Dapil</label>
+        <select id="filterDapil" class="w-full bg-slate-900/50 border border-slate-700 text-white p-2 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold">
+            <option value="ALL">SEMUA DAPIL</option>
+        </select>
+    </div>
+    <div class="glass-card p-6 rounded-2xl border-t-4 border-t-orange-500">
+        <label class="block text-[10px] text-slate-400 mb-2 font-black uppercase tracking-widest">Filter Kecamatan</label>
+        <select id="filterKecamatan" class="w-full bg-slate-900/50 border border-slate-700 text-white p-2 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold">
+            <option value="ALL">SEMUA KECAMATAN</option>
+        </select>
+    </div>
+    <div class="glass-card p-6 rounded-2xl flex items-center justify-center">
+        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
+            <i class="fas fa-print"></i> CETAK LAPORAN
+        </button>
+    </div>
+</div>
 
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+    <div class="glass-card p-6 rounded-3xl">
+        <h3 class="text-emerald-400 font-bold mb-4 uppercase text-sm tracking-widest"><i class="fas fa-trophy"></i> Top 5 Desa (Kader Terbanyak)</h3>
+        <div id="top-leaderboard" class="space-y-3"></div>
+    </div>
+    <div class="glass-card p-6 rounded-3xl">
+        <h3 class="text-rose-400 font-bold mb-4 uppercase text-sm tracking-widest"><i class="fas fa-exclamation-triangle"></i> Bottom 5 Desa (Perlu Evaluasi)</h3>
+        <div id="bottom-leaderboard" class="space-y-3"></div>
+    </div>
+</div>
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
                 <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl shadow-lg shadow-blue-500/10">
                     <i class="fas fa-landmark"></i>
