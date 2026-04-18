@@ -1,155 +1,320 @@
-const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
-const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
-const RANGE = 'Sheet1!A2:E281'; 
-
-let allData = [];
-let myChart = null;
-let map = null;
-let geojsonLayer = null;
-
-// Indeks Kolom: 1:Desa, 2:Kecamatan, 3:DPRT, 4:Kader
-const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
-
-async function initDashboard() {
-    try {
-        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
-        const data = await response.json();
-        
-        if (!data.values) return;
-        
-        // Membersihkan data dari spasi tambahan
-        allData = data.values.filter(row => row.length >= 3).map(row => {
-            if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
-            return row;
-        });
-
-        const select = document.getElementById('filterKecamatan');
-        const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))]
-            .filter(val => val && isNaN(val))
-            .sort();
-        
-        select.innerHTML = '<option value="ALL">SEMUA KECAMATAN</option>';
-        kecamatanList.forEach(kec => {
-            let opt = document.createElement('option');
-            opt.value = kec;
-            opt.textContent = kec;
-            select.appendChild(opt);
-        });
-
-        applyFilter();
-        initMap();
-
-    } catch (e) { 
-        console.error("Error load data:", e); 
-    }
-}
-
-function applyFilter() {
-    const filterValue = document.getElementById('filterKecamatan').value;
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Pemenangan PAN - Kabupaten Bandung</title>
     
-    const filtered = filterValue === "ALL" 
-        ? allData 
-        : allData.filter(row => row[idx.kec] === filterValue);
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 
-    const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-    const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
-    
-    document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
-    document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
+    <style>
+        :root {
+            --pan-blue-dark: #004182;
+            --pan-blue-main: #0054a6;
+            --pan-blue-light: #00a0e9;
+            --bg-slate: #0f172a;
+        }
 
-    let labels, vals;
-    if (filterValue === "ALL") {
-        const summary = {};
-        filtered.forEach(row => {
-            const kec = row[idx.kec];
-            if(kec) summary[kec] = (summary[kec] || 0) + (parseInt(row[idx.dprt]) || 0);
-        });
-        labels = Object.keys(summary);
-        vals = Object.values(summary);
-    } else {
-        labels = filtered.map(row => row[idx.desa]);
-        vals = filtered.map(row => parseInt(row[idx.dprt]) || 0);
-    }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-slate);
+            color: #f8fafc;
+            margin: 0;
+        }
 
-    renderChart(labels, vals);
-    if (geojsonLayer) geojsonLayer.resetStyle();
-}
+        .header-gradient {
+            background: linear-gradient(135deg, var(--pan-blue-dark) 0%, var(--pan-blue-main) 100%);
+            border-bottom: 4px solid var(--pan-blue-light);
+        }
 
-function renderChart(l, v) {
-    const ctx = document.getElementById('panChart').getContext('2d');
-    if (myChart) myChart.destroy();
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+        }
 
-    myChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: l,
-            datasets: [{
-                label: 'DPRT Aktif',
-                data: v,
-                backgroundColor: '#3b82f6',
-                borderRadius: 4
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { ticks: { color: '#94a3b8', autoSkip: false, font: { size: 9 } } },
-                x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 1rem;
+            z-index: 1;
+        }
+
+        .custom-select {
+            background-color: #1e293b;
+            color: white;
+            border: 1px solid #334155;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            width: 100%;
+        }
+
+        .stat-value {
+            background: linear-gradient(to right, #fff, var(--pan-blue-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        /* Custom Popup Leaflet */
+        .leaflet-popup-content-wrapper {
+            background: #1e293b;
+            color: white;
+            border: 1px solid var(--pan-blue-light);
+        }
+        .leaflet-popup-tip { background: #1e293b; }
+    </style>
+</head>
+<body>
+
+    <header class="header-gradient p-4 shadow-2xl">
+        <div class="container mx-auto flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" alt="Kab Bandung" class="h-14 w-auto drop-shadow-md">
+                <img src="https://upload.wikimedia.org/wikipedia/id/thumb/e/e0/Logo_DPRD_Kabupaten_Bandung.png/200px-Logo_DPRD_Kabupaten_Bandung.png" alt="DPRD" class="h-14 w-auto drop-shadow-md">
+            </div>
+            
+            <div class="text-center flex-1">
+                <h1 class="text-2xl md:text-3xl font-bold tracking-tight">DATA PEMENANGAN PARTAI AMANAT NASIONAL</h1>
+                <p class="text-blue-200 text-sm md:text-base">Monitoring Kekuatan Kader & DPRT Kabupaten Bandung</p>
+            </div>
+
+            <div class="flex items-center">
+                <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" alt="PAN" class="h-16 w-auto drop-shadow-md">
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-6 space-y-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="glass-card p-6 flex flex-col justify-center">
+                <label class="block text-sm font-medium mb-2 text-blue-300">PILIH WILAYAH</label>
+                <select id="filterKecamatan" class="custom-select" onchange="applyFilter()">
+                    <option value="ALL">SEMUA KECAMATAN</option>
+                </select>
+            </div>
+            
+            <div class="glass-card p-6 text-center border-l-4 border-blue-500">
+                <p class="text-gray-400 text-sm uppercase tracking-wider font-semibold">Total DPRT Aktif</p>
+                <h2 id="stat-dprt" class="text-4xl stat-value">0</h2>
+            </div>
+
+            <div class="glass-card p-6 text-center border-l-4 border-cyan-400">
+                <p class="text-gray-400 text-sm uppercase tracking-wider font-semibold">Total Kader</p>
+                <h2 id="stat-kader" class="text-4xl stat-value">0</h2>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card p-4">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-blue-500 rounded-full"></span>
+                    Sebaran Wilayah (Kecamatan)
+                </h3>
+                <div id="map"></div>
+            </div>
+
+            <div class="glass-card p-4">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span class="w-2 h-6 bg-cyan-400 rounded-full"></span>
+                    Statistik Perbandingan Kader & DPRT
+                </h3>
+                <div class="h-[450px]">
+                    <canvas id="panChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_KEY = 'AIzaSyCYtG_xQDwjzZ2gnlwucGtVWyz9VU51GWs';
+        const SPREADSHEET_ID = '1D0H3zZ4meoumKNAwQl8zqfHLUZ2r-KI7KYbfoD-hPz4';
+        const RANGE = 'Sheet1!A2:E281'; 
+
+        let allData = [];
+        let myChart = null;
+        let map = null;
+        let geojsonLayer = null;
+
+        const idx = { desa: 1, kec: 2, dprt: 3, kader: 4 };
+
+        async function initDashboard() {
+            try {
+                const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${API_KEY}`);
+                const data = await response.json();
+                
+                if (!data.values) return;
+                
+                allData = data.values.filter(row => row.length >= 3).map(row => {
+                    if(row[idx.kec]) row[idx.kec] = row[idx.kec].trim().toUpperCase();
+                    return row;
+                });
+
+                const select = document.getElementById('filterKecamatan');
+                const kecamatanList = [...new Set(allData.map(row => row[idx.kec]))]
+                    .filter(val => val && isNaN(val))
+                    .sort();
+                
+                kecamatanList.forEach(kec => {
+                    let opt = document.createElement('option');
+                    opt.value = kec;
+                    opt.textContent = kec;
+                    select.appendChild(opt);
+                });
+
+                initMap();
+                applyFilter();
+
+            } catch (e) { 
+                console.error("Error load data:", e); 
             }
         }
-    });
-}
 
-function initMap() {
-    if (map) return;
-    map = L.map('map').setView([-7.0252, 107.5197], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        function applyFilter() {
+            const filterValue = document.getElementById('filterKecamatan').value;
+            
+            const filtered = filterValue === "ALL" 
+                ? allData 
+                : allData.filter(row => row[idx.kec] === filterValue);
 
-    fetch('kab-bandung.json')
-        .then(res => res.json())
-        .then(geoData => {
-            geojsonLayer = L.geoJson(geoData, {
-                style: styleMap,
-                onEachFeature: (feature, layer) => {
-                    // Logika pencarian nama kecamatan yang lebih kuat
-                    let name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
-                    
-                    // Jika nama yang muncul masih "BANDUNG", kita coba ambil dari properti lain jika ada
-                    if (name === "BANDUNG" && feature.properties.KEC) {
-                        name = feature.properties.KEC.toUpperCase().trim();
+            const totalDPRT = filtered.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+            const totalKader = filtered.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
+            
+            document.getElementById('stat-dprt').innerText = totalDPRT.toLocaleString('id-ID');
+            document.getElementById('stat-kader').innerText = totalKader.toLocaleString('id-ID');
+
+            let labels = [], vDPRT = [], vKader = [];
+
+            if (filterValue === "ALL") {
+                const summary = {};
+                filtered.forEach(row => {
+                    const kec = row[idx.kec];
+                    if(kec) {
+                        if(!summary[kec]) summary[kec] = { d: 0, k: 0 };
+                        summary[kec].d += (parseInt(row[idx.dprt]) || 0);
+                        summary[kec].k += (parseInt(row[idx.kader]) || 0);
                     }
+                });
+                labels = Object.keys(summary);
+                vDPRT = labels.map(l => summary[l].d);
+                vKader = labels.map(l => summary[l].k);
+            } else {
+                labels = filtered.map(row => row[idx.desa]);
+                vDPRT = filtered.map(row => parseInt(row[idx.dprt]) || 0);
+                vKader = filtered.map(row => parseInt(row[idx.kader]) || 0);
+            }
 
-                    const dataKec = allData.filter(row => row[idx.kec] === name);
-                    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+            renderChart(labels, vDPRT, vKader);
+            if (geojsonLayer) geojsonLayer.resetStyle();
+        }
 
-                    layer.bindPopup(`<b>KECAMATAN: ${name}</b><br>DPRT Aktif: ${total.toLocaleString('id-ID')}`);
-                    
-                    layer.on('click', () => {
-                        const select = document.getElementById('filterKecamatan');
-                        for (let i = 0; i < select.options.length; i++) {
-                            if (select.options[i].value === name) {
-                                select.selectedIndex = i;
-                                applyFilter();
-                                break;
-                            }
+        function renderChart(l, vD, vK) {
+            const ctx = document.getElementById('panChart').getContext('2d');
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: l,
+                    datasets: [
+                        {
+                            label: 'Kader',
+                            data: vK,
+                            backgroundColor: '#00a0e9',
+                            borderRadius: 4,
+                            barPercentage: 0.8
+                        },
+                        {
+                            label: 'DPRT Aktif',
+                            data: vD,
+                            backgroundColor: '#0054a6',
+                            borderRadius: 4,
+                            barPercentage: 0.8
                         }
-                    });
+                    ]
+                },
+                options: {
+                    indexAxis: 'y',
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { labels: { color: '#94a3b8' } },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } },
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+                    }
                 }
+            });
+        }
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map').setView([-7.0252, 107.5197], 10);
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap'
             }).addTo(map);
-        });
-}
 
-function styleMap(feature) {
-    const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
-    const dataKec = allData.filter(row => row[idx.kec] === name);
-    const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
-    return { fillColor: getColor(total), weight: 1.5, color: 'white', fillOpacity: 0.7 };
-}
+            fetch('kab-bandung.json')
+                .then(res => res.json())
+                .then(geoData => {
+                    geojsonLayer = L.geoJson(geoData, {
+                        style: styleMap,
+                        onEachFeature: (feature, layer) => {
+                            let name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
+                            
+                            const dataKec = allData.filter(row => row[idx.kec] === name);
+                            const tDPRT = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+                            const tKader = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.kader]) || 0), 0);
 
-function getColor(d) {
-    return d > 2000 ? '#1e3a8a' : d > 1000 ? '#1d4ed8' : d > 500 ? '#3b82f6' : d > 100 ? '#93c5fd' : '#334155'; 
-}
+                            layer.bindPopup(`
+                                <div class="p-2">
+                                    <b class="text-blue-400">KECAMATAN ${name}</b><br>
+                                    <div class="mt-2 text-sm">
+                                        DPRT Aktif: <b>${tDPRT}</b><br>
+                                        Total Kader: <b>${tKader}</b>
+                                    </div>
+                                </div>
+                            `);
+                            
+                            layer.on('click', () => {
+                                const select = document.getElementById('filterKecamatan');
+                                select.value = name;
+                                applyFilter();
+                            });
+                        }
+                    }).addTo(map);
+                });
+        }
 
-initDashboard();
+        function styleMap(feature) {
+            const name = (feature.properties.KECAMATAN || feature.properties.name || feature.properties.NAMOBJ || "").toUpperCase().trim();
+            const dataKec = allData.filter(row => row[idx.kec] === name);
+            const total = dataKec.reduce((acc, row) => acc + (parseInt(row[idx.dprt]) || 0), 0);
+            return { 
+                fillColor: getColor(total), 
+                weight: 1, 
+                color: '#334155', 
+                fillOpacity: 0.7 
+            };
+        }
+
+        function getColor(d) {
+            return d > 1000 ? '#004182' : 
+                   d > 500  ? '#0054a6' : 
+                   d > 100  ? '#00a0e9' : 
+                   d > 10   ? '#7dd3fc' : 
+                              '#1e293b'; 
+        }
+
+        initDashboard();
+    </script>
+</body>
+</html>
