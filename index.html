@@ -42,7 +42,7 @@
         .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
 
         .logo-container img {
-            height: 60px;
+            height: 50px;
             object-fit: contain;
         }
     </style>
@@ -53,8 +53,7 @@
         <header class="mb-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div class="flex items-center gap-4 logo-container">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/b/b2/Lambang_Kabupaten_Bandung.png" alt="Logo Kab Bandung">
-                <img src="https://upload.wikimedia.org/wikipedia/id/thumb/e/e0/Logo_DPRD_Kabupaten_Bandung.png/200px-Logo_DPRD_Kabupaten_Bandung.png" alt="Logo DPRD">
-                <div class="h-12 w-[1px] bg-white/20 mx-2"></div>
+                <div class="h-10 w-[1px] bg-white/20 mx-2"></div>
                 <img src="https://upload.wikimedia.org/wikipedia/id/4/47/Partai_Amanat_Nasional_Logo.svg" alt="Logo PAN">
             </div>
 
@@ -66,47 +65,51 @@
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="glass-card p-6 rounded-2xl border-t-4 border-t-blue-500">
-                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-[0.2em]">Pilih Wilayah</label>
+                <label class="block text-[10px] text-slate-400 mb-3 font-black uppercase tracking-[0.2em]">Pilih Kecamatan</label>
                 <select id="filterKecamatan" class="w-full bg-slate-900/50 border border-slate-700 text-white p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer font-bold">
-                    <option value="ALL">KABUPATEN BANDUNG (SEMUA)</option>
+                    <option value="ALL">SEMUA WILAYAH</option>
                 </select>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
                 <div class="bg-blue-600/20 p-4 rounded-xl text-blue-400 text-2xl"><i class="fas fa-sitemap"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">DPRT Aktif</p>
-                    <h2 id="stat-dprt" class="text-4xl font-black text-white">31</h2>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Total Kel/Desa</p>
+                    <h2 id="stat-desa" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5">
                 <div class="bg-orange-500/20 p-4 rounded-xl text-orange-400 text-2xl"><i class="fas fa-users"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Total Kader</p>
-                    <h2 id="stat-kader" class="text-4xl font-black text-white">1.240</h2>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Estimasi Kader</p>
+                    <h2 id="stat-kader" class="text-4xl font-black text-white">0</h2>
                 </div>
             </div>
 
             <div class="glass-card p-6 rounded-2xl flex items-center gap-5 border-r-4 border-r-emerald-500">
-                <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl"><i class="fas fa-percentage"></i></div>
+                <div class="bg-emerald-500/20 p-4 rounded-xl text-emerald-400 text-2xl"><i class="fas fa-shield-alt"></i></div>
                 <div>
-                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Kesiapan</p>
-                    <h2 class="text-4xl font-black text-emerald-400">100%</h2>
+                    <p class="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Status Verifikasi</p>
+                    <h2 class="text-4xl font-black text-emerald-400">AKTIF</h2>
                 </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
             <div class="lg:col-span-2 glass-card p-6 rounded-3xl">
-                <h3 class="font-bold text-lg text-white mb-6">Statistik Per Wilayah</h3>
+                <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
+                    <i class="fas fa-chart-bar text-blue-400"></i> Sebaran Kader per Kecamatan
+                </h3>
                 <div class="h-[600px]">
                     <canvas id="panChart"></canvas>
                 </div>
             </div>
 
             <div class="lg:col-span-3 glass-card p-6 rounded-3xl">
-                <h3 class="font-bold text-lg text-white mb-6">Sebaran Geografis</h3>
+                <h3 class="font-bold text-lg text-white mb-6 flex items-center gap-2">
+                    <i class="fas fa-map-marked-alt text-blue-400"></i> Peta Teritorial Kab. Bandung
+                </h3>
                 <div id="map"></div>
             </div>
         </div>
@@ -114,85 +117,148 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script>
-        // Konfigurasi Peta
-        var map = L.map('map').setView([-7.02, 107.55], 10);
+        // Inisialisasi Peta - Fokus ke Kab. Bandung
+        var map = L.map('map').setView([-7.03, 107.65], 10);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         var geojsonLayer;
-        var labelsKecamatan = [];
-        var dataDummyKader = [];
+        var statsData = {};
+        let myChart;
 
-        // Load Data Wilayah
+        // Properti yang dicari di JSON (Sesuaikan jika di JSON Anda berbeda, misal: NAME_3)
+        const PROPERTY_KEY = "NAME_3"; 
+
         fetch('kab-bandung.json')
             .then(res => res.json())
             .then(data => {
+                processData(data);
+                
                 geojsonLayer = L.geoJSON(data, {
-                    style: {
-                        color: "#3b82f6",
-                        weight: 1.5,
-                        fillColor: "#1d4ed8",
-                        fillOpacity: 0.3
+                    style: function(feature) {
+                        return {
+                            color: "#3b82f6",
+                            weight: 1,
+                            fillColor: "#1d4ed8",
+                            fillOpacity: 0.3
+                        };
                     },
                     onEachFeature: function (feature, layer) {
-                        const kecName = feature.properties.NAME_3;
+                        const kecName = feature.properties[PROPERTY_KEY];
+                        
                         if (kecName) {
-                            // Isi dropdown filter
-                            let option = document.createElement("option");
-                            option.value = kecName;
-                            option.text = kecName.toUpperCase();
-                            document.getElementById("filterKecamatan").appendChild(option);
-                            
-                            // Ambil nama untuk chart
-                            labelsKecamatan.push(kecName);
-                            dataDummyKader.push(Math.floor(Math.random() * 200) + 50); // Contoh data
+                            layer.bindPopup(`
+                                <div class="text-slate-800">
+                                    <strong class="text-lg">${kecName}</strong><br>
+                                    <hr class="my-1">
+                                    Total Kader: <strong>${statsData[kecName]}</strong>
+                                </div>
+                            `);
 
-                            layer.bindPopup("<strong>Kecamatan: </strong>" + kecName);
+                            layer.on('mouseover', function() {
+                                this.setStyle({ fillOpacity: 0.7, weight: 2 });
+                            });
+
+                            layer.on('mouseout', function() {
+                                if (document.getElementById("filterKecamatan").value !== kecName) {
+                                    this.setStyle({ fillOpacity: 0.3, weight: 1 });
+                                }
+                            });
+
+                            layer.on('click', function() {
+                                document.getElementById("filterKecamatan").value = kecName;
+                                updateSelection(kecName);
+                            });
                         }
                     }
                 }).addTo(map);
-                
+
                 initChart();
+                updateGlobalStats();
             });
 
-        // Inisialisasi Chart.js
+        function processData(data) {
+            const select = document.getElementById("filterKecamatan");
+            let listKecamatan = [];
+
+            data.features.forEach(f => {
+                const name = f.properties[PROPERTY_KEY];
+                if (name && !listKecamatan.includes(name)) {
+                    listKecamatan.push(name);
+                    // Generate data dummy konsisten berdasarkan nama (biar tidak berubah saat refresh)
+                    statsData[name] = Math.floor(Math.random() * 150) + 40;
+                }
+            });
+
+            listKecamatan.sort().forEach(name => {
+                let option = document.createElement("option");
+                option.value = name;
+                option.text = name.toUpperCase();
+                select.appendChild(option);
+            });
+
+            document.getElementById("stat-desa").innerText = data.features.length;
+        }
+
+        function updateGlobalStats() {
+            const totalKader = Object.values(statsData).reduce((a, b) => a + b, 0);
+            document.getElementById("stat-kader").innerText = totalKader.toLocaleString('id-ID');
+        }
+
         function initChart() {
             const ctx = document.getElementById('panChart').getContext('2d');
-            new Chart(ctx, {
+            const labels = Object.keys(statsData).sort();
+            const values = labels.map(l => statsData[l]);
+
+            myChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: labelsKecamatan,
+                    labels: labels,
                     datasets: [{
-                        label: 'Jumlah Kader',
-                        data: dataDummyKader,
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 5
+                        label: 'Kader',
+                        data: values,
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                        borderColor: '#60a5fa',
+                        borderWidth: 1,
+                        borderRadius: 4
                     }]
                 },
                 options: {
                     indexAxis: 'y',
                     maintainAspectRatio: false,
-                    responsive: true,
-                    plugins: { legend: { display: false } },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { backgroundColor: '#1e293b' }
+                    },
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } },
-                        y: { grid: { display: false }, ticks: { color: '#f1f5f9', font: { size: 10 } } }
+                        x: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' }, 
+                            ticks: { color: '#94a3b8' } 
+                        },
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#f1f5f9', font: { size: 9 } } 
+                        }
                     }
                 }
             });
         }
 
-        // Fungsi Filter (Logic Sederhana)
-        document.getElementById("filterKecamatan").addEventListener("change", function(e) {
-            const val = e.target.value;
+        function updateSelection(val) {
             geojsonLayer.eachLayer(function(layer) {
-                if (val === "ALL" || layer.feature.properties.NAME_3 === val) {
-                    layer.setStyle({ fillOpacity: 0.7, color: '#60a5fa' });
-                    if (val !== "ALL") map.fitBounds(layer.getBounds());
+                if (val === "ALL" || layer.feature.properties[PROPERTY_KEY] === val) {
+                    layer.setStyle({ fillOpacity: 0.7, color: '#60a5fa', weight: 2 });
+                    if (val !== "ALL" && layer.feature.properties[PROPERTY_KEY] === val) {
+                        map.fitBounds(layer.getBounds());
+                    }
                 } else {
-                    layer.setStyle({ fillOpacity: 0.1, color: '#334155' });
+                    layer.setStyle({ fillOpacity: 0.1, color: '#334155', weight: 1 });
                 }
             });
-            if (val === "ALL") map.setView([-7.02, 107.55], 10);
+            if (val === "ALL") map.setView([-7.03, 107.65], 10);
+        }
+
+        document.getElementById("filterKecamatan").addEventListener("change", function(e) {
+            updateSelection(e.target.value);
         });
     </script>
 </body>
